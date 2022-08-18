@@ -3,7 +3,10 @@ project(depth_image_extractor)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
-add_compile_options(-std=c++17 -O3)
+add_compile_options(-std=c++17 -O3 -DPROFILE -DBROWNCONRADY -DDEBUG_KALMAN)
+
+## Fastest compile options
+#add_compile_options(-std=c++17 -O3)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -42,10 +45,16 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
+add_library(ObjectDetection src/ObjectDetection.cpp)
+add_library(PoseEstimator src/PoseEstimator.cpp)
+add_library(KalmanFilter src/KalmanFilter.cpp)
+add_library(Hungarian src/Hungarian.cpp)
+
 add_executable(depth_extractor src/depth_extractor.cpp)
 add_executable(tensorRT_detection src/tensorRT_detection.cpp)
 add_executable(tensorRT_detection_v2 src/tensorRT_detection_v2.cpp)
 add_executable(tensorRT_detection_v3 src/tensorRT_detection_v3.cpp)
+
 
 target_link_libraries(depth_extractor
     ${catkin_LIBRARIES}
@@ -67,6 +76,10 @@ target_link_libraries(tensorRT_detection_v2
 target_link_libraries(tensorRT_detection_v3
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
+    Hungarian
+    ObjectDetection
+    PoseEstimator
+    KalmanFilter
     nvinfer
     cudart
 )
