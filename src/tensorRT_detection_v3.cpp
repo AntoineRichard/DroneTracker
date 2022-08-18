@@ -1,14 +1,19 @@
 #include <string>
 #include <vector>
+#include <map>
 
 #include <depth_image_extractor/KalmanFilter.h>
 #include <depth_image_extractor/PoseEstimator.h>
 #include <depth_image_extractor/ObjectDetection.h>
+#include <depth_image_extractor/Hungarian.h>
 
 // ROS
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/Point.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/Float32.h>
 #include <image_transport/image_transport.h>
 #include <ros/ros.h>
 
@@ -24,49 +29,6 @@
 # define WIDTH 6
 # define AREA 7
 
-class DecisionTree {
-  private:
-    float center_threshold_; 
-    float area_threshold_; 
-    float body_ratio_;
-    float centroids_error(const std::vector<float>&, const std::vector<float>&);
-    float area_ratio(const std::vector<float>&, const std::vector<float>&);
-    float bodyShapeError(const std::vector<float>&, const std::vector<float>&);
-  public:
-    DecisionTree();
-    DecisionTree(float, float, float);
-    bool isMatch(const std::vector<float>&, const std::vector<float>&);
-};
-
-DecisionTree::DecisionTree() {
-}
-
-DecisionTree::DecisionTree(float center_threshold, float area_threshold, float body_ratio) {
-  center_threshold_ = center_threshold;
-  area_threshold_ = area_threshold;
-  body_ratio_ = body_ratio;
-}
-
-float DecisionTree::centroids_error(const std::vector<float>& s1, const std::vector<float>& s2) {
-   return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]) + (s1[2] - s2[2])*(s1[2] - s2[2]));
-}
-
-float DecisionTree::area_ratio(const std::vector<float>& s1, const std::vector<float>& s2) {
-  return (s1[6]*s1[7]) / (s2[6]*s2[7]);
-}
-
-float DecisionTree::bodyShapeError(const std::vector<float>& s1, const std::vector<float>& s2) {
-  return (s1[6]/s1[7]) / (s2[6]/s2[7]);
-}
-
-bool DecisionTree::isMatch(const std::vector<float>& s1, const std::vector<float>& s2){
-  if (centroids_error(s1,s2) < center_threshold_) {
-    if ((1/area_threshold_ < area_ratio(s1,s2)) && (area_ratio(s1,s2) < area_threshold_)) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /*struct Trace {
   unsigned int id;
@@ -93,29 +55,313 @@ bool DecisionTree::isMatch(const std::vector<float>& s1, const std::vector<float
 
 class Drone {
   private:
-    KalmanFilter KF_;
-    unsigned int skipped_frame_;
+    KalmanFilter* KF_;
+    unsigned int nb_skipped_frames_;
     unsigned int nb_frames_;
     unsigned int id_;
   public:
     Drone();
-    Drone(unsigned int, unsigned int, unsigned int);
+    Drone(const unsigned int&, const float&, const bool&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+    void setState(const std::vector<float>&);
     void newFrame();
-    void update();
     void predict();
+    void predict(const float&);
+    void correct(const std::vector<float>&);
     void getState(std::vector<float>&);
     void getUncertainty(std::vector<float>&);
+    int getSkippedFrames();
 };
+
+Drone::Drone() : KF_() {  
+}
+
+Drone::Drone(const unsigned int& id, const float& dt, const bool& use_dim, const bool& use_z, const bool& use_vel, const std::vector<float>& Q, const std::vector<float>& R) : KF_() {
+  KF_ = new KalmanFilter(dt, use_dim, use_z, use_vel, Q, R);
+  id_ = id;
+  nb_frames_ = 0;
+  nb_skipped_frames_ = 0;
+}
+
+void Drone::setState(const std::vector<float>& state){
+  KF_->resetFilter(state);
+}
+
+void Drone::predict() {
+  KF_->predict();
+}
+
+void Drone::predict(const float& dt) {
+  KF_->predict(dt);
+}
+
+void Drone::correct(const std::vector<float>&  Z) {
+  KF_->correct(Z);
+  nb_skipped_frames_ = 0;
+}
+
+void Drone::newFrame() {
+  nb_frames_ ++;
+  nb_skipped_frames_ ++;
+}
+
+void Drone::getState(std::vector<float>& state) {
+  KF_->getState(state);
+}
+
+void Drone::getUncertainty(std::vector<float>& uncertainty) {
+  KF_->getUncertainty(uncertainty);
+}
+
+int Drone::getSkippedFrames() {
+  return nb_skipped_frames_;
+}
+
 
 class Tracker {
   private:
+    // Tracker state
+    std::map<unsigned int, Drone*> Drones_;
     unsigned int track_id_count_;
-    std::vector<Drone> Drones_;
+
+    // Solver
+    HungarianAlgorithm* HA_;
+
+    // Tracker parameters
+    unsigned int max_frames_to_skip_;
+    float dist_threshold_;
+    float center_threshold_;
+    float area_threshold_; 
+    float body_ratio_;
+
+    // Kalman parameters
+    std::vector<float> R_;
+    std::vector<float> Q_;
+    float dt_;
+    bool use_dim_;
+    bool use_z_;
+    bool use_vel_;
+
+    void incrementFrame();
+    float centroidsError(const std::vector<float>&, const std::vector<float>&) const;
+    float distanceError(const std::vector<float>&, const std::vector<float>&) const;
+    float areaRatio(const std::vector<float>&, const std::vector<float>&) const;
+    float bodyShapeError(const std::vector<float>&, const std::vector<float>&) const;
+    bool isMatch(const std::vector<float>&, const std::vector<float>&) const;
+    void computeCost(std::vector<std::vector<double>>&, const std::vector<std::vector<float>>&, std::map<int, int>&);
+    void hungarianMatching(std::vector<std::vector<double>>&, std::vector<int>&);
   public:
     Tracker();
+    Tracker(const int&, const float&, const float&, const float&, const float&, const float&, const bool&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+    void update(const float&, const std::vector<std::vector<float>>&);
+    void getStates(std::map<int, std::vector<float>>&);
 };
 
+Tracker::Tracker() : HA_() {
 
+}
+
+Tracker::Tracker(const int& max_frames_to_skip, const float& dist_treshold, const float& center_threshold,
+                 const float& area_threshold, const float& body_ratio, const float& dt, const bool& use_dim,
+                 const bool& use_z, const bool& use_vel, const std::vector<float>& Q, const std::vector<float>& R) : HA_() {
+
+  max_frames_to_skip_ = max_frames_to_skip;
+  dist_threshold_ = dist_treshold;
+  center_threshold_ = center_threshold;
+  area_threshold_ = area_threshold;
+  body_ratio_ = body_ratio;
+
+  Q_ = Q;
+  R_ = R;
+  use_dim_ = use_dim;
+  use_z_ = use_z;
+  use_vel_ = use_vel;
+  dt_ = dt;
+
+  track_id_count_ = 0;
+}
+
+void Tracker::getStates(std::map<int, std::vector<float>>& tracks){
+  std::vector<float> state(8); 
+  for (auto & element : Drones_) {
+    element.second->getState(state);
+    tracks[element.first] = state;
+  }
+}
+
+void Tracker::incrementFrame(){
+  //for (const std::pair<unsigned int, *Drone>& element : Drones_) {
+  for (auto & element : Drones_) {
+    element.second->newFrame();
+  }
+}
+
+float Tracker::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
+   return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]) + (s1[2] - s2[2])*(s1[2] - s2[2]));
+}
+
+float Tracker::areaRatio(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  return (s1[6]*s1[7]) / (s2[6]*s2[7]);
+}
+
+float Tracker::bodyShapeError(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  return (s1[6]/s1[7]) / (s2[6]/s2[7]);
+}
+
+bool Tracker::isMatch(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  ROS_INFO("centroidError: %.3f, %.3f",centroidsError(s1,s2), center_threshold_);
+  if (centroidsError(s1,s2) < center_threshold_) {
+    ROS_INFO("areaRatio: %.3f, %.3f",areaRatio(s1,s2), area_threshold_);
+    if ((1/area_threshold_ < areaRatio(s1,s2)) && (areaRatio(s1,s2) < area_threshold_)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Tracker::computeCost(std::vector<std::vector<double>>& cost, const std::vector<std::vector<float>>& states, std::map<int, int>& index_mapping) {
+  cost.resize(Drones_.size(), std::vector<double>(states.size()));
+  unsigned int i = 0;
+  std::vector<float> state(8);
+  //for (std::pair<unsigned int, *Drone> &element : Drones_) {
+  for (auto & element : Drones_) {
+    index_mapping[i] = element.first;
+    for (unsigned int j=0; j<states.size(); j++) {
+      element.second->getState(state);
+      cost[i][j] = (double) centroidsError(state,states[j]);
+    }
+    i ++;
+  }
+}
+
+void Tracker::hungarianMatching(std::vector<std::vector<double>>& cost, std::vector<int>& assignments) {
+  HA_->Solve(cost, assignments);
+}
+
+void Tracker::update(const float& dt, const std::vector<std::vector<float>>& states){
+  std::vector<std::vector<double>> cost;
+  std::map<int, int> tracks_mapping;
+  std::map<int, int> states_mapping;
+  std::vector<int> assignments;
+  std::vector<float> state(8);
+  std::vector<int> unassigned_tracks;
+  std::vector<int> unassigned_detections;
+
+  // Update the Kalman filters
+  ROS_INFO("Updating Kalman filters.");
+  for (auto & element : Drones_) {
+    element.second->predict(dt);
+  }
+
+  // Increment the number of frames.
+  incrementFrame();
+
+  if (states.empty()) {
+    return;
+  }
+
+  // If tracks are empty, then create some new tracks.
+  if (Drones_.empty()) {
+    ROS_INFO("Creating new tracks.");
+    for (unsigned int i=0; i < states.size(); i++) {
+      Drones_.insert(std::make_pair(track_id_count_, new Drone(track_id_count_, dt_, use_dim_, use_z_, use_vel_, Q_, R_)));
+      Drones_[track_id_count_]->setState(states[i]);
+      track_id_count_ ++;
+    }
+  }
+
+  // Match the new detections with the current tracks.
+  ROS_INFO("Computing cost");
+  for (unsigned int i=0; i < states.size(); i++) {
+    ROS_INFO("state %d:", i);
+    for (unsigned int j=0; j < states[i].size(); j++) {
+      ROS_INFO(" + state %d-%d: %.3f",i,j,states[i][j]);
+    }
+  }
+  unsigned int i = 0;
+  for (auto & element : Drones_) {
+    ROS_INFO("kalman states %d:", element.first);
+    element.second->getState(state);
+    for (unsigned int j=0; j < state.size(); j++) {
+      ROS_INFO(" + kalman state %d-%d: %.3f",i,j,state[j]);
+    } 
+    i ++;
+  }
+  computeCost(cost, states, tracks_mapping); 
+  ROS_INFO("Performing matching");
+  for (unsigned int i=0; i < cost.size(); i++) {
+    ROS_INFO("cost %d:");
+    for (unsigned int j=0; j < cost[i].size(); j++) {
+      ROS_INFO(" + cost %d-%d: %.3f",i,j,cost[i][j]);
+    }
+  }
+  hungarianMatching(cost, assignments);
+  ROS_INFO("assignments are:");
+  for (unsigned int i=0; i<assignments.size();i++) {
+    ROS_INFO(" + matching track raw %d with detection %d.",i,assignments[i]);
+    ROS_INFO(" + matching track %d with detection %d.",tracks_mapping[i],assignments[i]);
+  }
+
+  // Check for unassigned tracks
+  ROS_INFO("Cheking for unassigned tracks.");
+  for (unsigned int i=0; i < assignments.size(); i++) {
+    if (assignments[i] == -1) {
+      unassigned_tracks.push_back(i);
+    } else {
+      Drones_[index_mapping[i]]->getState(state);
+      if (!isMatch(state, states[assignments[i]])) {
+        assignments[i] = -1;
+        unassigned_tracks.push_back(i);
+      }
+    }
+
+  }
+
+  // Check for unassigned detections
+  ROS_INFO("Cheking for unassigned detections.");
+  bool assigned;
+  for (unsigned int i=0; i < states.size(); i++) {
+    assigned = false;
+    for (unsigned int j=0; j < assignments.size(); j++) {
+      if (assignments[j] == i) {
+        assigned = true;
+      }
+    }
+    if (!assigned) {
+      unassigned_detections.push_back(i);
+    }
+  }
+
+  // Remove old tracks
+  ROS_INFO("Removing old tracks.");
+  for (auto it = Drones_.cbegin(); it != Drones_.cend();)
+  {
+    if (it->second->getSkippedFrames() > max_frames_to_skip_)
+    {
+      it = Drones_.erase(it);
+    }
+    else
+    {
+      ++it;
+    }
+  }
+
+  // Start new tracks
+  ROS_INFO("Starting new tracks.");
+  for (unsigned int i=0; i < unassigned_detections.size(); i++) {
+    Drones_.insert(std::make_pair(track_id_count_, new Drone(track_id_count_, dt_, use_dim_, use_z_, use_vel_, Q_, R_)));
+    Drones_[track_id_count_]->setState(states[unassigned_detections[i]]);
+    track_id_count_ ++;
+  }
+
+  // Correct the Kalman filters
+  ROS_INFO("Correcting filters.");
+  for (unsigned int i=0; i < assignments.size(); i++) {
+    if (assignments[i] != -1) {
+      Drones_[tracks_mapping[i]]->correct(states[assignments[i]]);
+    }
+  }
+  ROS_INFO("Num tracks %d", track_id_count_); 
+}
 
 class ROSDetector {
   private:
@@ -124,20 +370,63 @@ class ROSDetector {
 
     image_transport::Subscriber image_sub_;
     image_transport::Subscriber depth_sub_;
-    image_transport::Publisher image_pub_;
+    image_transport::Publisher detection_pub_;
+    image_transport::Publisher tracker_pub_;
+    ros::Subscriber depth_info_sub_;
+    ros::Subscriber camera_pose_sub_;
+    ros::Subscriber drone_pose_sub_;
+    ros::Publisher drone_distance_opt_pub_;
+    ros::Publisher drone_distance_rs2_pub_;
+    ros::Publisher drone_relative_pose_pub_;
 
+    // Image parameters
     int image_size_;
+    int image_rows_;
+    int image_cols_;
     int padding_rows_;
     int padding_cols_;
     cv::Mat padded_image_;
     cv::Mat depth_image_;
-
     sensor_msgs::ImagePtr image_ptr_out_;
+
+    // Tracker parameters
+    std::vector<float> Q_;
+    std::vector<float> R_;
+    float dist_threshold_;
+    float center_threshold_;
+    float area_threshold_;
+    float body_ratio_;
+    bool use_dim_;
+    bool use_z_;
+    bool use_vel_;
+    int max_frames_to_skip_;
+    float min_bbox_width_;
+    float min_bbox_height_;
+    float max_bbox_width_;
+    float max_bbox_height_;
+
+    // dt update for Kalman 
+    float dt_;
+    ros::Time t1_;
+    ros::Time t2_;   
+
+    // Position estimation
+    geometry_msgs::PoseStamped camera_pos_;
+    geometry_msgs::PoseStamped drone_pos_;
+    float cam2drone_;
+
     ObjectDetector* OD_;
     PoseEstimator* PE_;
+    Tracker* TR_;
 
     void imageCallback(const sensor_msgs::ImageConstPtr&);
     void depthCallback(const sensor_msgs::ImageConstPtr&);
+    void cameraPoseCallback(const geometry_msgs::PoseStampedConstPtr&);
+    void dronePoseCallback(const geometry_msgs::PoseStampedConstPtr&);
+    void depthInfoCallback(const sensor_msgs::CameraInfoConstPtr&);
+    void cast2states(std::vector<std::vector<float>>&,
+                     const std::vector<std::vector<BoundingBox>>&,
+                     const std::vector<std::vector<float>>&);
     void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
     void padImage(const cv::Mat&);
 
@@ -146,28 +435,70 @@ class ROSDetector {
     ~ROSDetector();
 };
 
-ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
+ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_(), TR_() {
   float nms_tresh, conf_tresh;
   int max_output_bbox_count;
   
-  std::string default_path_to_engine("  distances = PE_->extractDistanceFromDepth(depth_image_, bboxes);None");
+  std::string default_path_to_engine("None");
   std::string path_to_engine;
 
+  Q_.resize(8);
+  R_.resize(8);
 
   nh_.param("nms_tresh",nms_tresh,0.45f);
   nh_.param("image_size",image_size_,640);
   nh_.param("conf_tresh",conf_tresh,0.25f);
   nh_.param("max_output_bbox_count", max_output_bbox_count, 1000);
   nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
+  nh_.param("image_rows", image_rows_, 480);
+  nh_.param("image_cols", image_cols_, 640);
+  nh_.param("max_frames_to_skip", max_frames_to_skip_, 15);
+  nh_.param("dist_threshold", dist_threshold_, 54.0f);
+  nh_.param("center_threshold", center_threshold_, 80.0f);
+  nh_.param("area_threshold", area_threshold_, 3.0f);
+  nh_.param("body_ration", body_ratio_, 0.5f);
+  nh_.param("dt", dt_, 0.02f);
+  nh_.param("use_dim", use_dim_, true);
+  nh_.param("use_z", use_z_, false);
+  nh_.param("Q0", Q_[0], 3.0f);
+  nh_.param("Q1", Q_[1], 3.0f);
+  nh_.param("Q2", Q_[2], 0.3f);
+  nh_.param("Q3", Q_[3], 3.0f);
+  nh_.param("Q4", Q_[4], 3.0f);
+  nh_.param("Q5", Q_[5], 0.3f);
+  nh_.param("Q6", Q_[6], 5.0f);
+  nh_.param("Q7", Q_[7], 5.0f);
+  nh_.param("R0", R_[0], 5.0f);
+  nh_.param("R1", R_[1], 5.0f);
+  nh_.param("R2", R_[2], 0.3f);
+  nh_.param("R3", R_[3], 5.0f);
+  nh_.param("R4", R_[4], 5.0f);
+  nh_.param("R5", R_[5], 0.3f);
+  nh_.param("R6", R_[6], 3.0f);
+  nh_.param("R7", R_[7], 5.0f);
+  nh_.param("max_bbox_width", max_bbox_width_, 400.0f);
+  nh_.param("max_bbox_height", max_bbox_height_, 300.0f);
+  nh_.param("min_bbox_width", min_bbox_width_, 60.0f);
+  nh_.param("min_bbox_height", min_bbox_height_, 60.0f);
+
   OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
-  PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, 480, 640);
+  PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
+  TR_ = new Tracker(max_frames_to_skip_, dist_threshold_, center_threshold_,
+                    area_threshold_, body_ratio_, dt_, use_dim_,
+                    use_z_, use_vel_, Q_, R_);
   
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
-  //depth_image_ = cv::Mat::zeros(image_size_, image_size_, CV_16UC1);
+  cam2drone_ = 0;
 
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetector::imageCallback, this);
   depth_sub_ = it_.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &ROSDetector::depthCallback, this);
-  image_pub_ = it_.advertise("/detection/image", 1);
+  depth_info_sub_ = nh_.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &ROSDetector::depthInfoCallback, this);
+  camera_pose_sub_ = nh_.subscribe("/vrpn_client_node/CAM/pose", 1, &ROSDetector::cameraPoseCallback, this);
+  drone_pose_sub_ = nh_.subscribe("/vrpn_client_node/UAV/pose", 1, &ROSDetector::dronePoseCallback, this);
+  detection_pub_ = it_.advertise("/detection/raw_detection", 1);
+  tracker_pub_ = it_.advertise("/detection/tracking", 1);
+  drone_relative_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/detection/pose", 1);
+  t1_ = ros::Time::now();
 }
 
 ROSDetector::~ROSDetector() {
@@ -184,6 +515,21 @@ void ROSDetector::padImage(const cv::Mat& image) {
     padding_cols_ = (image_size_ - image.cols)/2;
     image.copyTo(padded_image_(cv::Range(padding_rows_,padding_rows_+image.rows),cv::Range(padding_cols_,padding_cols_+image.cols)));
   }
+}
+
+void ROSDetector::cameraPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg) {
+  camera_pos_ = *msg;
+}
+
+void ROSDetector::dronePoseCallback(const geometry_msgs::PoseStampedConstPtr& msg) {
+  drone_pos_ = *msg;
+  cam2drone_ = std::sqrt((drone_pos_.pose.position.x - camera_pos_.pose.position.x) * (drone_pos_.pose.position.x - camera_pos_.pose.position.x) +
+                        (drone_pos_.pose.position.y - camera_pos_.pose.position.y) * (drone_pos_.pose.position.y - camera_pos_.pose.position.y) +
+                        (drone_pos_.pose.position.z - camera_pos_.pose.position.z) * (drone_pos_.pose.position.z - camera_pos_.pose.position.z));
+}
+
+void ROSDetector::depthInfoCallback(const sensor_msgs::CameraInfoConstPtr& msg){
+  PE_->updateCameraParameters(msg->K[2], msg->K[5], msg->K[0], msg->K[4], msg->D);
 }
 
 void ROSDetector::depthCallback(const sensor_msgs::ImageConstPtr& msg){
@@ -205,16 +551,56 @@ void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bbo
       }
     bboxes[0][j].x_ -= padding_cols_;
     bboxes[0][j].y_ -= padding_rows_;
-    bboxes[0][j].x_min_ = bboxes[0][j].x_ - bboxes[0][j].w_/2;
-    bboxes[0][j].x_max_ = bboxes[0][j].x_ + bboxes[0][j].w_/2;
-    bboxes[0][j].y_min_ = bboxes[0][j].y_ - bboxes[0][j].h_/2;
-    bboxes[0][j].y_max_ = bboxes[0][j].y_ + bboxes[0][j].h_/2;
+    bboxes[0][j].x_min_ = std::max(bboxes[0][j].x_ - bboxes[0][j].w_/2, (float) 0.0);
+    bboxes[0][j].x_max_ = std::min(bboxes[0][j].x_ + bboxes[0][j].w_/2, (float) image_cols_);
+    bboxes[0][j].y_min_ = std::max(bboxes[0][j].y_ - bboxes[0][j].h_/2, (float) 0.0);
+    bboxes[0][j].y_max_ = std::min(bboxes[0][j].y_ + bboxes[0][j].h_/2, (float) image_rows_);
+  }
+}
+
+void ROSDetector::cast2states(std::vector<std::vector<float>>& states, const std::vector<std::vector<BoundingBox>>& bboxes, const std::vector<std::vector<float>>& points) {
+  states.clear();
+  std::vector<float> state(8);
+
+  for (unsigned int i; i < points.size(); i++) {
+    if (!bboxes[0][i].valid_) {
+      continue;
+    }
+    if (bboxes[0][i].h_ > max_bbox_height_) {
+      continue;
+    }
+    if (bboxes[0][i].w_ > max_bbox_width_) {
+      continue;
+    }
+    if (bboxes[0][i].h_ < min_bbox_height_) {
+      continue;
+    }
+    if (bboxes[0][i].w_ < min_bbox_width_) {
+      continue;
+    }
+    state[0] = bboxes[0][i].x_;
+    state[1] = bboxes[0][i].y_;
+    state[2] = points[0][2];
+    state[3] = 0;
+    state[4] = 0;
+    state[5] = 0;
+    state[6] = bboxes[0][i].h_;
+    state[7] = bboxes[0][i].w_;
+    states.push_back(state);
+    ROS_INFO("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", i, state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7]);
   }
 }
 
 void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
+  t2_ = t1_;
+  t1_ = ros::Time::now();
+  ros::Duration dt = t1_ - t2_; 
+  dt_ = (float) (dt.toSec());
+  ROS_INFO("Delta time: %.3f, %.3f, %.3f, %.3f", t1_.toSec(), t2_.toSec(), dt_, dt.toSec());
+#ifdef PROFILE
+  auto start_image = std::chrono::system_clock::now();
+#endif
   cv_bridge::CvImagePtr cv_ptr;
-  //cv::Mat image_new;
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
   } catch (cv_bridge::Exception &e) {
@@ -222,26 +608,57 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
     return;
   }
   cv::Mat image = cv_ptr->image;
-  auto start = std::chrono::system_clock::now();
+  cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+  cv::Mat image_tracker = image.clone();
   padImage(image);
+#ifdef PROFILE
+  auto end_image = std::chrono::system_clock::now();
+  auto start_detection = std::chrono::system_clock::now();
+#endif
   std::vector<std::vector<BoundingBox>> bboxes(ObjectClass::NUM_CLASS);
   OD_->detectObjects(padded_image_, bboxes);
   adjustBoundingBoxes(bboxes);
+#ifdef PROFILE
+  auto end_detection = std::chrono::system_clock::now();
+  auto start_distance = std::chrono::system_clock::now();
+#endif
   std::vector<float> distances;
-  auto start1 = std::chrono::system_clock::now();
   distances = PE_->extractDistanceFromDepth(depth_image_, bboxes);
+#ifdef PROFILE
+  auto end_distance = std::chrono::system_clock::now();
+  auto start_position = std::chrono::system_clock::now();
+#endif
   std::vector<std::vector<float>> points;
   points = PE_->estimatePosition(distances, bboxes);
-  auto end1 = std::chrono::system_clock::now();
-  auto end = std::chrono::system_clock::now();
-  ROS_INFO("Full inference done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-  ROS_INFO("Depth detection %d us", std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1).count());
+#ifdef PROFILE
+  auto end_position = std::chrono::system_clock::now();
+  auto start_tracking = std::chrono::system_clock::now();
+#endif 
+  std::vector<std::vector<float>> states;
+  cast2states(states, bboxes, points);
+  TR_->update(dt_, states);
+  std::map<int, std::vector<float>> tracker_states;
+  TR_->getStates(tracker_states);
+#ifdef PROFILE
+  auto end_tracking = std::chrono::system_clock::now();
+  ROS_INFO("Full inference done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_position - start_image).count());
+  ROS_INFO(" - Image processing done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
+  ROS_INFO(" - Object detection done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
+  ROS_INFO(" - Distance estimation done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+  ROS_INFO(" - Position estimation done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_position - start_position).count());
+  ROS_INFO(" - Tracking done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking - start_tracking).count());
+#endif
+  ROS_INFO("Raw measurments:");
   for (unsigned int i=0; i<distances.size(); i++){
-    ROS_INFO("Distance of object %d : %.3fm",i,distances[i]);
-    ROS_INFO("Object %d position: x %.3f y %.3f z %.3f",i,points[i][0],points[i][1],points[i][2]);
+    if (!bboxes[0][i].valid_) {
+      continue;
+    }
+    ROS_INFO(" - Object %d:",i);
+    ROS_INFO("   + Estimated distance: %.3f",distances[i]);
+    ROS_INFO("   + Measured distance:  %.3f",cam2drone_);
+    ROS_INFO("   + Estimated position: x %.3f y %.3f z %.3f",points[i][0],points[i][1],points[i][2]);
   }
 
-  
   for (unsigned int i=0; i<bboxes[0].size(); i++) {
     if (!bboxes[0][i].valid_) {
       continue;
@@ -251,13 +668,58 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
     cv::rectangle(image, rect, cv::Scalar(0,255,0), 3);
     cv::putText(image, std::to_string(distances[i]), cv::Point(bboxes[0][i].x_min_,bboxes[0][i].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(0,255,0), 2);
   }
+
+  const std::vector<cv::Scalar> colors{
+      cv::Scalar(0, 64, 255),
+      cv::Scalar(64, 255, 0),
+      cv::Scalar(255, 0, 64),
+      cv::Scalar(0, 255, 192),
+      cv::Scalar(255, 192, 0),
+      cv::Scalar(192, 0, 255),
+      cv::Scalar(0, 192, 255),
+      cv::Scalar(192, 255, 0),
+      cv::Scalar(255, 0, 192),
+      cv::Scalar(0, 255, 64),
+      cv::Scalar(255, 64, 0),
+      cv::Scalar(64, 0, 255),
+      cv::Scalar(0, 128, 255),
+      cv::Scalar(128, 255, 0),
+      cv::Scalar(255, 0, 128),
+      cv::Scalar(0, 255, 128),
+      cv::Scalar(255, 128, 0),
+      cv::Scalar(128, 0, 255),
+      cv::Scalar(0, 255, 255),
+      cv::Scalar(255, 255, 0),
+      cv::Scalar(255, 0, 255),
+      cv::Scalar(0, 255, 0),
+      cv::Scalar(255, 0, 0),
+      cv::Scalar(0, 0, 255)
+  };
+
+  for (auto & element : tracker_states) {
+    cv::Rect rect(element.second[0] - element.second[7]/2, element.second[1]-element.second[6]/2, element.second[7], element.second[6]);
+    cv::rectangle(image_tracker, rect, colors[element.first % 24], 3);
+    cv::putText(image_tracker, std::to_string(element.first), cv::Point(element.second[0]-element.second[7]/2,element.second[1]-element.second[6]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, colors[element.first % 24], 2);
+  }
   
   //image.convertTo(image, CV_8UC3, 255.0f);
   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
   std_msgs::Header image_ptr_out_header;
   image_ptr_out_header.stamp = ros::Time::now();
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image).toImageMsg();
-  image_pub_.publish(image_ptr_out_);
+  detection_pub_.publish(image_ptr_out_);
+  
+  cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
+  image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
+  tracker_pub_.publish(image_ptr_out_);
+
+  if (points.size() > 0) {
+    geometry_msgs::PoseStamped pose;
+    pose.pose.position.x = points[0][0];
+    pose.pose.position.y = points[0][1];
+    pose.pose.position.z = points[0][2];
+    drone_relative_pose_pub_.publish(pose);
+  }
 }
 
 int main(int argc, char** argv)
