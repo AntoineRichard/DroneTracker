@@ -12,6 +12,7 @@ class KalmanFilter {
     float dt_;
     bool use_dim_;
     bool use_z_;
+    bool use_vel_;
 
     Eigen::VectorXf X_;
     Eigen::VectorXf Z_;
@@ -22,15 +23,18 @@ class KalmanFilter {
     Eigen::MatrixXf I8_;
     Eigen::MatrixXf H_;
 
-    void initialize();
+    void initialize(const std::vector<float>&, const std::vector<float>&);
     void getMeasurement(const std::vector<float>&);
 
   public:
     KalmanFilter();
-    KalmanFilter(float, bool, bool);
+    KalmanFilter(const float&, const bool&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
     void resetFilter(const std::vector<float>&);
-    void update();
+    void updateF(const float&);
+    void buildR(const std::vector<float>&);
+    void buildH();
     void predict();
+    void predict(const float&);
     void correct(const std::vector<float>&);
     void getState(std::vector<float>&);
     void getUncertainty(std::vector<float>&);
