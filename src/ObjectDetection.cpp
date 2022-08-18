@@ -4,6 +4,8 @@
 
 // CUDA/TENSOR_RT
 #include <depth_image_extractor/ObjectDetection.h>
+#include <opencv2/opencv.hpp>
+#include <ros/ros.h>
 
 ObjectDetector::ObjectDetector() {
 }

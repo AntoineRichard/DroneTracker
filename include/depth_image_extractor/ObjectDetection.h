@@ -6,6 +6,8 @@
 #include <execution>
 #include <set>
 
+#include <opencv2/opencv.hpp>
+
 // CUDA/TENSOR_RT
 #include <NvInfer.h>
 #include <cuda_runtime_api.h>
