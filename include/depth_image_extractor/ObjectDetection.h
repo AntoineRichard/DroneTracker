@@ -25,6 +25,9 @@
   }
 
 enum ObjectClass { CLASS_DRONE = 0, NUM_CLASS = 1 };
+static const std::vector<std::string> ClassMap{
+  std::string("Drone")
+};
 
 class ObjectDetector {
   private:
