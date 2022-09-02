@@ -16,7 +16,9 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   roscpp
   sensor_msgs
+  geometry_msgs
   std_msgs
+  message_generation
 )
 
 find_package(OpenCV REQUIRED)
@@ -30,6 +32,21 @@ include_directories(/home/antoine/Downloads/TensorRT-8.4.1.5/include)
 link_directories(/home/antoine/Downloads/TensorRT-8.4.1.5/lib)
 include_directories($(EIGEN3_INCLUDE_DIR))
 
+add_message_files(
+   FILES
+   BoundingBox2D.msg
+   BoundingBoxes2D.msg
+   PositionBoundingBox2D.msg
+   PositionBoundingBox2DArray.msg
+   PositionID.msg
+   PositionIDArray.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+)
 
 catkin_package(
   DEPENDS  OpenCV
@@ -46,6 +63,7 @@ include_directories(
 )
 
 add_library(ObjectDetection src/ObjectDetection.cpp)
+add_library(Tracker src/Tracker.cpp)
 add_library(PoseEstimator src/PoseEstimator.cpp)
 add_library(KalmanFilter src/KalmanFilter.cpp)
 add_library(Hungarian src/Hungarian.cpp)
@@ -53,7 +71,9 @@ add_library(Hungarian src/Hungarian.cpp)
 add_executable(depth_extractor src/depth_extractor.cpp)
 add_executable(tensorRT_detection src/tensorRT_detection.cpp)
 add_executable(tensorRT_detection_v2 src/tensorRT_detection_v2.cpp)
-add_executable(tensorRT_detection_v3 src/tensorRT_detection_v3.cpp)
+#add_executable(tensorRT_detection_v3 src/tensorRT_detection_v3.cpp)
+add_executable(detection_node src/detection_node.cpp)
+add_executable(detection_depth_node src/detection_depth_node.cpp)
 
 
 target_link_libraries(depth_extractor
@@ -73,13 +93,31 @@ target_link_libraries(tensorRT_detection_v2
     cudart
 )
 
-target_link_libraries(tensorRT_detection_v3
+target_link_libraries(detection_node
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
-    Hungarian
     ObjectDetection
-    PoseEstimator
-    KalmanFilter
     nvinfer
     cudart
 )
+
+target_link_libraries(detection_depth_node
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBS}
+    PoseEstimator
+    ObjectDetection
+    nvinfer
+    cudart
+)
+
+#target_link_libraries(tensorRT_detection_v3
+#    ${catkin_LIBRARIES}
+#    ${OpenCV_LIBS}
+#    Tracker
+#    Hungarian
+#    ObjectDetection
+#    PoseEstimator
+#    KalmanFilter
+#    nvinfer
+#    cudart
+#)
