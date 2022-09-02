@@ -1,5 +1,34 @@
 #pragma once
 
+#include <opencv2/opencv.hpp>
+
+static const std::vector<cv::Scalar> ColorPalette{
+      cv::Scalar(0, 64, 255),
+      cv::Scalar(64, 255, 0),
+      cv::Scalar(255, 0, 64),
+      cv::Scalar(0, 255, 192),
+      cv::Scalar(255, 192, 0),
+      cv::Scalar(192, 0, 255),
+      cv::Scalar(0, 192, 255),
+      cv::Scalar(192, 255, 0),
+      cv::Scalar(255, 0, 192),
+      cv::Scalar(0, 255, 64),
+      cv::Scalar(255, 64, 0),
+      cv::Scalar(64, 0, 255),
+      cv::Scalar(0, 128, 255),
+      cv::Scalar(128, 255, 0),
+      cv::Scalar(255, 0, 128),
+      cv::Scalar(0, 255, 128),
+      cv::Scalar(255, 128, 0),
+      cv::Scalar(128, 0, 255),
+      cv::Scalar(0, 255, 255),
+      cv::Scalar(255, 255, 0),
+      cv::Scalar(255, 0, 255),
+      cv::Scalar(0, 255, 0),
+      cv::Scalar(255, 0, 0),
+      cv::Scalar(0, 0, 255)
+  };
+
 class BoundingBox {
     public:
         BoundingBox (float* data): 
