@@ -1,0 +1,1 @@
+depth_image_extractor/PoseBoundingBox2D[] bboxes

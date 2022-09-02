@@ -1,0 +1,2 @@
+float32 detection_id
+Point position
