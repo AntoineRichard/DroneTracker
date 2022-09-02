@@ -28,8 +28,8 @@ class PoseEstimator {
   public:
     PoseEstimator();
     PoseEstimator(float, float, float, float, int, int);
-    std::vector<float> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
-    std::vector<std::vector<float>> estimatePosition(const std::vector<float>& , const std::vector<std::vector<BoundingBox>>&);
+    std::vector<std::vector<float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
+    std::vector<std::vector<std::vector<float>>> estimatePosition(const std::vector<std::vector<float>>& , const std::vector<std::vector<BoundingBox>>&);
     void deprojectPixel2PointBrownConrady(const float&, const std::vector<float>&, std::vector<float>&);
     void deprojectPixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
     void distancePixel2PointBrownConrady(const float&, const std::vector<float>&, std::vector<float>&);
