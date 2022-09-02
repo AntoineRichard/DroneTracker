@@ -86,8 +86,9 @@ void PoseEstimator::distancePixel2PointBrownConrady(const float& depth, const st
   point[2] = z;
 }
 
-std::vector<float> PoseEstimator::extractDistanceFromDepth(const cv::Mat& depth_image, const std::vector<std::vector<BoundingBox>>& bboxes){
+std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv::Mat& depth_image, const std::vector<std::vector<BoundingBox>>& bboxes){
   std::vector<float> distance_vector;
+  std::vector<std::vector<float>> distance_vectors;
   std::vector<float> distances;
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
@@ -103,91 +104,104 @@ std::vector<float> PoseEstimator::extractDistanceFromDepth(const cv::Mat& depth_
 #endif
 
   if (depth_image.empty()) {
-    for (unsigned int i=0; i < bboxes[0].size(); i++) {
-      if (!bboxes[0][i].valid_) {
-        distance_vector.push_back(-1);
-        continue;
+    for (unsigned int i=0; i < bboxes.size(); i++) {
+      distance_vector.clear();
+      for (unsigned int j=0; j < bboxes[i].size(); j++) {
+        if (!bboxes[0][i].valid_) {
+          distance_vector.push_back(-1);
+          continue;
+        }
       }
-      distance_vector.push_back(-1);
+      distance_vectors.push_back(distance_vector);
     }
     return distance_vector; 
   }
+
   size_t reject, keep;
   for (unsigned int i=0; i < bboxes[0].size(); i++) {
+    distance_vector.clear();
+    for (unsigned int j=0; j < bboxes[i].size(); j++) {
 #ifdef PROFILE
     start_distance = std::chrono::system_clock::now();
 #endif
-    if (!bboxes[0][i].valid_) {
-      distance_vector.push_back(-1);
+      if (!bboxes[i][j].valid_) {
+        distance_vector.push_back(-1);
 #ifdef PROFILE
-      end_distance = std::chrono::system_clock::now();
-      ROS_INFO(" - Obj %d distance done in %d us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+        end_distance = std::chrono::system_clock::now();
+        ROS_INFO(" - Obj %d distance done in %d us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
 #endif
-      continue;
-    }
+        continue;
+      }
 #ifdef PROFILE
-    start_measure = std::chrono::system_clock::now();
+      start_measure = std::chrono::system_clock::now();
 #endif
-    rows = bboxes[0][i].y_max_ - bboxes[0][i].y_min_;
-    cols = bboxes[0][i].x_max_ - bboxes[0][i].x_min_;
-    distances.clear();
-    //distances.resize(rows*cols, 0);
-    for (unsigned int row = bboxes[0][i].y_min_; row<bboxes[0][i].y_max_; row++) {
-      for (unsigned int col = bboxes[0][i].x_min_; col<bboxes[0][i].x_max_; col++) {
-        z = depth_image.at<float>(row, col);
-        if (z != 0) {
-          pixel[0] = row;
-          pixel[1] = col;
+      rows = bboxes[i][j].y_max_ - bboxes[i][j].y_min_;
+      cols = bboxes[i][j].x_max_ - bboxes[i][j].x_min_;
+      distances.clear();
+      //distances.resize(rows*cols, 0);
+      for (unsigned int row = bboxes[0][i].y_min_; row<bboxes[0][i].y_max_; row++) {
+        for (unsigned int col = bboxes[0][i].x_min_; col<bboxes[0][i].x_max_; col++) {
+          z = depth_image.at<float>(row, col);
+          if (z != 0) {
+            pixel[0] = row;
+            pixel[1] = col;
 #ifdef BROWNCONRADY
-          deprojectPixel2PointBrownConrady(z, pixel, point);
+            deprojectPixel2PointBrownConrady(z, pixel, point);
 #else
-          deprojectPixel2PointPinHole(z, pixel, point);
+            deprojectPixel2PointPinHole(z, pixel, point);
 #endif
-          d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
-          //distances[(row - bboxes[0][i].y_min_)*cols + (col - bboxes[0][i].x_min_)] = d;
-          distances.push_back(d);
+            d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
+            //distances[(row - bboxes[0][i].y_min_)*cols + (col - bboxes[0][i].x_min_)] = d;
+            distances.push_back(d);
+          }
         }
       }
+#ifdef PROFILE
+      end_measure = std::chrono::system_clock::now();
+#endif
+      reject = distances.size() * rejection_threshold_;
+      keep = distances.size() * keep_threshold_;
+      std::sort(distances.begin(), distances.end(), std::less<float>());
+      distance_vector.push_back(std::accumulate(distances.begin() + reject, distances.begin() + reject+keep,0.0) / keep);
+#ifdef PROFILE
+      end_distance = std::chrono::system_clock::now();
+      ROS_INFO(" - Obj %d distance time %d us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+      ROS_INFO("   + measure time %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
+      ROS_INFO("   + sort time %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
+#endif
     }
-#ifdef PROFILE
-    end_measure = std::chrono::system_clock::now();
-#endif
-    reject = distances.size() * rejection_threshold_;
-    keep = distances.size() * keep_threshold_;
-    std::sort(distances.begin(), distances.end(), std::less<float>());
-    distance_vector.push_back(std::accumulate(distances.begin() + reject, distances.begin() + reject+keep,0.0) / keep);
-#ifdef PROFILE
-    end_distance = std::chrono::system_clock::now();
-    ROS_INFO(" - Obj %d distance time %d us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
-    ROS_INFO("   + measure time %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
-    ROS_INFO("   + sort time %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
-#endif
+    distance_vectors.push_back(distance_vector);
   }
-  return distance_vector;
+  return distance_vectors;
 }
 
 
-std::vector<std::vector<float>> PoseEstimator::estimatePosition(const std::vector<float>& distances, const std::vector<std::vector<BoundingBox>>& bboxes) {
-  std::vector<std::vector<float>> points;
+std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(const std::vector<std::vector<float>>& distances, const std::vector<std::vector<BoundingBox>>& bboxes) {
+  std::vector<std::vector<std::vector<float>>> point_vectors;
+  std::vector<std::vector<float>> point_vector;
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
-  for (unsigned int i=0; i < bboxes[0].size(); i++) {
-    float theta, phi;
-    if (!bboxes[0][i].valid_) {
-      point[0] = 0;
-      point[1] = 0;
-      point[2] = 0;
-      points.push_back(point);
-      continue;
-    }
-    pixel[0] = bboxes[0][i].x_;
-    pixel[1] = bboxes[0][i].y_;
+  for (unsigned int i=0; i < bboxes.size(); i++) {
+    point_vector.clear()
+    for (unsigned int j=0; j < bboxes[i].size(); j++) {
+      float theta, phi;
+      if (!bboxes[i][j].valid_) {
+        point[0] = 0;
+        point[1] = 0;
+        point[2] = 0;
+        point_vector.push_back(point);
+        continue;
+      }
+      pixel[0] = bboxes[i][j].x_;
+      pixel[1] = bboxes[i][j].y_;
 #ifdef BROWNCONRADY
-    distancePixel2PointBrownConrady(distances[i], pixel, point);
+      distancePixel2PointBrownConrady(distances[i], pixel, point);
 #else
-    distancePixel2PointPinHole(distances[i], pixel, point);
+      distancePixel2PointPinHole(distances[i], pixel, point);
 #endif
-    points.push_back(point);
+      point_vector.push_back(point);
+    }
+    point_vectors.push_back(point_vector);
   }
   return points;
 }
