@@ -68,7 +68,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_() {
 #ifdef PUBLISH_DETECTION_IMAGE
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
 #endif
-  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBox2D>("/detection/bounding_boxes", 1);
+  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBoxes2D>("/detection/bounding_boxes", 1);
 }
 
 ROSDetector::~ROSDetector() {
@@ -88,8 +88,8 @@ void ROSDetector::padImage(const cv::Mat& image) {
 }
 
 void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
-  for (unsigned int i=0; i < bboxes.size(); i++) {
-    for (unsigned int j=0; j < bboxes[i].size(); j++) {
+  for (unsigned int i=0; i < bboxes.size()+1; i++) {
+    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -133,8 +133,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE   
-  for (unsigned int i=0; i<bboxes.size(); i++) {
-    for (unsigned int j=0; j<bboxes[i].size(); j++) {
+  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -155,8 +155,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   depth_image_extractor::BoundingBox2D ros_bbox;
   std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
 
-  for (unsigned int i=0; i<bboxes.size(); i++) {
-    for (unsigned int j=0; j<bboxes[i].size(); j++) {
+  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -168,7 +168,6 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
       ros_bbox.detection_id = counter;
       counter ++;
       vec_ros_bboxes.push_back(ros_bbox);
-      cv::putText(image, ClassMap[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
     }
   }
   ros_bboxes.header.stamp = ros::Time::now();
