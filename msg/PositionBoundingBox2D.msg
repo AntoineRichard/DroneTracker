@@ -1,3 +1,2 @@
-Header header
 depth_image_extractor/BoundingBox2D bbox
-Point position
+geometry_msgs/Point position

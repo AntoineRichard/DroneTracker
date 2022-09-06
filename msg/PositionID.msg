@@ -1,2 +1,2 @@
 float32 detection_id
-Point position
+geometry_msgs/Point position

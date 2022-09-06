@@ -1,1 +1,2 @@
-depth_image_extractor/PoseBoundingBox2D[] bboxes
+Header header
+depth_image_extractor/PositionBoundingBox2D[] bboxes
