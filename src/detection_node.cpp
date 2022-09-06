@@ -127,9 +127,9 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   adjustBoundingBoxes(bboxes);
 #ifdef PROFILE
   auto end_detection = std::chrono::system_clock::now();
-  ROS_INFO("Full inference done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_image).count());
-  ROS_INFO(" - Image processing done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
-  ROS_INFO(" - Object detection done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
+  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_image).count());
+  ROS_INFO(" - Image processing done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
+  ROS_INFO(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE   
