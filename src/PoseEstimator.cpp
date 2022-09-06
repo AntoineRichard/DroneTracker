@@ -114,7 +114,7 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
       }
       distance_vectors.push_back(distance_vector);
     }
-    return distance_vector; 
+    return distance_vectors; 
   }
 
   size_t reject, keep;
@@ -182,7 +182,7 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
   for (unsigned int i=0; i < bboxes.size(); i++) {
-    point_vector.clear()
+    point_vector.clear();
     for (unsigned int j=0; j < bboxes[i].size(); j++) {
       float theta, phi;
       if (!bboxes[i][j].valid_) {
@@ -195,13 +195,13 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
       pixel[0] = bboxes[i][j].x_;
       pixel[1] = bboxes[i][j].y_;
 #ifdef BROWNCONRADY
-      distancePixel2PointBrownConrady(distances[i], pixel, point);
+      distancePixel2PointBrownConrady(distances[i][j], pixel, point);
 #else
-      distancePixel2PointPinHole(distances[i], pixel, point);
+      distancePixel2PointPinHole(distances[i][j], pixel, point);
 #endif
       point_vector.push_back(point);
     }
     point_vectors.push_back(point_vector);
   }
-  return points;
+  return point_vectors;
 }
