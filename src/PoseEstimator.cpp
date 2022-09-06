@@ -104,9 +104,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
 #endif
 
   if (depth_image.empty()) {
-    for (unsigned int i=0; i < bboxes.size(); i++) {
+    for (unsigned int i=0; i < bboxes.size()+1; i++) {
       distance_vector.clear();
-      for (unsigned int j=0; j < bboxes[i].size(); j++) {
+      for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
         if (!bboxes[0][i].valid_) {
           distance_vector.push_back(-1);
           continue;
@@ -118,9 +118,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
   }
 
   size_t reject, keep;
-  for (unsigned int i=0; i < bboxes[0].size(); i++) {
+  for (unsigned int i=0; i < bboxes.size()+1; i++) {
     distance_vector.clear();
-    for (unsigned int j=0; j < bboxes[i].size(); j++) {
+    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
 #ifdef PROFILE
     start_distance = std::chrono::system_clock::now();
 #endif
@@ -128,7 +128,7 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
         distance_vector.push_back(-1);
 #ifdef PROFILE
         end_distance = std::chrono::system_clock::now();
-        ROS_INFO(" - Obj %d distance done in %d us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+        ROS_INFO(" - Obj %d distance done in %ld us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
 #endif
         continue;
       }
@@ -165,9 +165,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
       distance_vector.push_back(std::accumulate(distances.begin() + reject, distances.begin() + reject+keep,0.0) / keep);
 #ifdef PROFILE
       end_distance = std::chrono::system_clock::now();
-      ROS_INFO(" - Obj %d distance time %d us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
-      ROS_INFO("   + measure time %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
-      ROS_INFO("   + sort time %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
+      ROS_INFO(" - Obj %d distance time %ld us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+      ROS_INFO("   + measure time %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
+      ROS_INFO("   + sort time %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
 #endif
     }
     distance_vectors.push_back(distance_vector);
@@ -181,9 +181,9 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
   std::vector<std::vector<float>> point_vector;
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
-  for (unsigned int i=0; i < bboxes.size(); i++) {
+  for (unsigned int i=0; i < bboxes.size()+1; i++) {
     point_vector.clear();
-    for (unsigned int j=0; j < bboxes[i].size(); j++) {
+    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
       float theta, phi;
       if (!bboxes[i][j].valid_) {
         point[0] = 0;

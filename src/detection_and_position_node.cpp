@@ -19,8 +19,6 @@
 #include <ros/ros.h>
 
 
-# define M_PI           3.14159265358979323846  /* pi */
-
 class ROSDetector {
   private:
     ros::NodeHandle nh_;
@@ -77,13 +75,13 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   nh_.param("nms_tresh",nms_tresh,0.45f);
   nh_.param("conf_tresh",conf_tresh,0.25f);
   nh_.param("max_output_bbox_count", max_output_bbox_count, 1000);
-
-  // Tracker parameters
-
-  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
-  PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
-
+  
   image_size_ = std::max(image_cols_, image_rows_);
+  padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
+
+  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh, max_output_bbox_count, 2, image_size_);
+  PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
+  
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetector::imageCallback, this);
@@ -96,7 +94,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   positions_bboxes_pub_ = nh_.advertise<depth_image_extractor::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
 #else
   positions_pub_ = nh_.advertise<depth_image_extractor::PositionIDArray>("/detection/positions",1);
-  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBox2D>("/detection/bounding_boxes", 1);
+  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBoxes2D>("/detection/bounding_boxes", 1);
 #endif
 }
 
@@ -121,8 +119,8 @@ void ROSDetector::padImage(const cv::Mat& image) {
 }
 
 void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
-  for (unsigned int i=0; i < bboxes.size(); i++) {
-    for (unsigned int j=0; j < bboxes[i].size(); j++) {
+  for (unsigned int i=0; i < bboxes.size()+1; i++) {
+    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -148,7 +146,6 @@ void ROSDetector::depthCallback(const sensor_msgs::ImageConstPtr& msg){
   cv_ptr->image.convertTo(depth_image_, CV_32F, 0.001);
 }
 
-
 void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #ifdef PROFILE
   auto start_image = std::chrono::system_clock::now();
@@ -162,7 +159,6 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   }
   cv::Mat image = cv_ptr->image;
   cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
-  cv::Mat image_tracker = image.clone();
   padImage(image);
 #ifdef PROFILE
   auto end_image = std::chrono::system_clock::now();
@@ -185,7 +181,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   points = PE_->estimatePosition(distances, bboxes);
 #ifdef PROFILE
   auto end_position = std::chrono::system_clock::now();
-  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_position - start_image).count());
+  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_image).count());
   ROS_INFO(" - Image processing done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
   ROS_INFO(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
   ROS_INFO(" - Distance estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
@@ -193,8 +189,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE   
-  for (unsigned int i=0; i<bboxes.size(); i++) {
-    for (unsigned int j=0; j<bboxes[i].size(); j++) {
+  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -214,8 +210,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   depth_image_extractor::PositionBoundingBox2DArray ros_bboxes;
   depth_image_extractor::PositionBoundingBox2D ros_bbox;
   std::vector<depth_image_extractor::PositionBoundingBox2D> vec_ros_bboxes;
-  for (unsigned int i=0; i<bboxes.size(); i++) {
-    for (unsigned int j=0; j<bboxes[i].size(); j++) {
+  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -245,8 +241,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
   std::vector<depth_image_extractor::PositionID> vec_id_positions;
 
-  for (unsigned int i=0; i<bboxes.size(); i++) {
-    for (unsigned int j=0; j<bboxes[i].size(); j++) {
+  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
