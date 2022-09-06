@@ -60,7 +60,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_() {
   nh_.param("image_rows", image_rows_, 480);
   nh_.param("image_cols", image_cols_, 640);
 
-  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
+  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh, max_output_bbox_count, 2, image_size_);
   
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
@@ -116,7 +116,6 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   }
   cv::Mat image = cv_ptr->image;
   cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
-  cv::Mat image_tracker = image.clone();
   padImage(image);
 #ifdef PROFILE
   auto end_image = std::chrono::system_clock::now();
