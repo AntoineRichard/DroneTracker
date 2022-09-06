@@ -1,0 +1,5 @@
+nms_tresh: 0.45
+image_width: 640
+image_height: 480
+conf_tresh: 0.25
+max_output_bbox_count: 1000
