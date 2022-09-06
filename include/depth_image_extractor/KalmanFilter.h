@@ -7,6 +7,17 @@
 #include <eigen3/Eigen/Dense>
 #include <math.h>
 
+#define I_PX 0
+#define I_PY 1
+#define I_PZ 2
+#define I_VX 3
+#define I_VY 4
+#define I_VZ 5
+#define I_H  6
+#define I_W  7
+#define I_CX 8
+#define I_CY 9
+
 class KalmanFilter {
   private:
     float dt_;
