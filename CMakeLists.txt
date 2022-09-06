@@ -69,11 +69,11 @@ add_library(KalmanFilter src/KalmanFilter.cpp)
 add_library(Hungarian src/Hungarian.cpp)
 
 add_executable(depth_extractor src/depth_extractor.cpp)
-add_executable(tensorRT_detection src/tensorRT_detection.cpp)
+add_executable(tensorRT_detection_v1 src/tensorRT_detection_v1.cpp)
 add_executable(tensorRT_detection_v2 src/tensorRT_detection_v2.cpp)
-#add_executable(tensorRT_detection_v3 src/tensorRT_detection_v3.cpp)
 add_executable(detection_node src/detection_node.cpp)
 add_executable(detection_and_position_node src/detection_and_position_node.cpp)
+add_executable(detect_locate_and_in_image_tracking_node src/detect_locate_and_in_image_tracking_node.cpp)
 
 
 target_link_libraries(depth_extractor
@@ -81,7 +81,7 @@ target_link_libraries(depth_extractor
     ${OpenCV_LIBS}
 )
 
-target_link_libraries(tensorRT_detection
+target_link_libraries(tensorRT_detection_v1
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
     nvinfer
@@ -112,14 +112,14 @@ target_link_libraries(detection_and_position_node
     cudart
 )
 
-#target_link_libraries(tensorRT_detection_v3
-#    ${catkin_LIBRARIES}
-#    ${OpenCV_LIBS}
-#    Tracker
-#    Hungarian
-#    ObjectDetection
-#    PoseEstimator
-#    KalmanFilter
-#    nvinfer
-#    cudart
-#)
+target_link_libraries(detect_locate_and_in_image_tracking_node
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBS}
+    Tracker
+    Hungarian
+    ObjectDetection
+    PoseEstimator
+    KalmanFilter
+    nvinfer
+    cudart
+)
