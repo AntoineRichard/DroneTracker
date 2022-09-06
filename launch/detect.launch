@@ -1,0 +1,10 @@
+<launch>
+  <param name="use_sim_time" value="true"/>
+
+  <group ns="object_detector">
+    <rosparam file="$(find depth_image_extractor)/config/object_detection.yaml"/>
+  </group>
+  <node name="object_detector" pkg="depth_image_extractor" type="detection_node" output="screen">
+    <param name="path_to_engine" type="string" value="/home/antoine/Documents/Sesame/Detection/Networks/yolov5/runs/train/model_xavier/weights/last.engine"/>
+  </node>
+</launch>
