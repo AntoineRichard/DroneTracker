@@ -3,7 +3,7 @@ project(depth_image_extractor)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
-add_compile_options(-std=c++17 -O3 -DPROFILE -DBROWNCONRADY -DDEBUG_KALMAN)
+add_compile_options(-std=c++17 -O3 -DPROFILE -DBROWNCONRADY -DDEBUG_KALMAN -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION)
 
 ## Fastest compile options
 #add_compile_options(-std=c++17 -O3)
@@ -73,19 +73,21 @@ add_executable(tensorRT_detection src/tensorRT_detection.cpp)
 add_executable(tensorRT_detection_v2 src/tensorRT_detection_v2.cpp)
 #add_executable(tensorRT_detection_v3 src/tensorRT_detection_v3.cpp)
 add_executable(detection_node src/detection_node.cpp)
-add_executable(detection_depth_node src/detection_depth_node.cpp)
+add_executable(detection_and_position_node src/detection_and_position_node.cpp)
 
 
 target_link_libraries(depth_extractor
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
 )
+
 target_link_libraries(tensorRT_detection
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
     nvinfer
     cudart
 )
+
 target_link_libraries(tensorRT_detection_v2
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
@@ -101,7 +103,7 @@ target_link_libraries(detection_node
     cudart
 )
 
-target_link_libraries(detection_depth_node
+target_link_libraries(detection_and_position_node
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
     PoseEstimator

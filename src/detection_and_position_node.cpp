@@ -70,17 +70,20 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   std::string default_path_to_engine("None");
   std::string path_to_engine;
 
+  // Object detector parameters
+  nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
+  nh_.param("image_height", image_rows_, 480);
+  nh_.param("image_width", image_cols_, 640);
   nh_.param("nms_tresh",nms_tresh,0.45f);
-  nh_.param("image_size",image_size_,640);
   nh_.param("conf_tresh",conf_tresh,0.25f);
   nh_.param("max_output_bbox_count", max_output_bbox_count, 1000);
-  nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
-  nh_.param("image_rows", image_rows_, 480);
-  nh_.param("image_cols", image_cols_, 640);
+
+  // Tracker parameters
 
   OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
   PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
-  
+
+  image_size_ = std::max(image_cols_, image_rows_);
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetector::imageCallback, this);
@@ -90,9 +93,9 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
 #endif
 #ifdef PUBLISH_DETECTION_WITH_POSITION
-  positions_bboxes_pub_ = nh.advertise<depth_image_extractor::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
+  positions_bboxes_pub_ = nh_.advertise<depth_image_extractor::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
 #else
-  positions_pub_ = nh.advertise<depth_image_extractor::PositionIDArray>("/detection/positions",1);
+  positions_pub_ = nh_.advertise<depth_image_extractor::PositionIDArray>("/detection/positions",1);
   bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBox2D>("/detection/bounding_boxes", 1);
 #endif
 }
@@ -182,11 +185,11 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   points = PE_->estimatePosition(distances, bboxes);
 #ifdef PROFILE
   auto end_position = std::chrono::system_clock::now();
-  ROS_INFO("Full inference done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_position - start_image).count());
-  ROS_INFO(" - Image processing done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
-  ROS_INFO(" - Object detection done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
-  ROS_INFO(" - Distance estimation done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
-  ROS_INFO(" - Position estimation done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_position - start_position).count());
+  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_position - start_image).count());
+  ROS_INFO(" - Image processing done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
+  ROS_INFO(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
+  ROS_INFO(" - Distance estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+  ROS_INFO(" - Position estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_position - start_position).count());
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE   
@@ -207,7 +210,32 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image).toImageMsg();
   detection_pub_.publish(image_ptr_out_);
 #endif
-#ifdef PUBLISH_POSITION_WITH_BOUNDING_BOX
+#ifdef PUBLISH_DETECTION_WITH_POSITION
+  depth_image_extractor::PositionBoundingBox2DArray ros_bboxes;
+  depth_image_extractor::PositionBoundingBox2D ros_bbox;
+  std::vector<depth_image_extractor::PositionBoundingBox2D> vec_ros_bboxes;
+  for (unsigned int i=0; i<bboxes.size(); i++) {
+    for (unsigned int j=0; j<bboxes[i].size(); j++) {
+      if (!bboxes[i][j].valid_) {
+        continue;
+      }
+      ros_bbox.bbox.min_x = bboxes[i][j].x_min_;
+      ros_bbox.bbox.min_y = bboxes[i][j].y_min_;
+      ros_bbox.bbox.height = bboxes[i][j].h_;
+      ros_bbox.bbox.width = bboxes[i][j].w_;
+      ros_bbox.bbox.class_id = i;
+      ros_bbox.position.x = points[i][j][0];
+      ros_bbox.position.y = points[i][j][1];
+      ros_bbox.position.z = points[i][j][2];
+      vec_ros_bboxes.push_back(ros_bbox);
+    }
+  }
+  ros_bboxes.header.stamp = cv_ptr->header.stamp;
+  ros_bboxes.header.frame_id = cv_ptr->header.frame_id;
+  ros_bboxes.bboxes = vec_ros_bboxes;
+  
+  positions_bboxes_pub_.publish(ros_bboxes);
+
 #else
   unsigned int counter = 0;
   depth_image_extractor::BoundingBoxes2D ros_bboxes;
@@ -215,6 +243,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   depth_image_extractor::PositionIDArray id_positions;
   depth_image_extractor::PositionID id_position;
   std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
+  std::vector<depth_image_extractor::PositionID> vec_id_positions;
 
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size(); j++) {
@@ -233,7 +262,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
       id_position.detection_id = counter;
       counter ++;
       vec_ros_bboxes.push_back(ros_bbox);
-      id_positions.push_back(id_position);
+      vec_id_positions.push_back(id_position);
     }
   }
   ros_bboxes.header.stamp = cv_ptr->header.stamp;
@@ -241,10 +270,10 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   ros_bboxes.bboxes = vec_ros_bboxes;
   id_positions.header.stamp = cv_ptr->header.stamp;
   id_positions.header.frame_id = cv_ptr->header.frame_id;
-  id_positions.positions = id_positions;
+  id_positions.positions = vec_id_positions;
 
   bboxes_pub_.publish(ros_bboxes);
-  positions_pub_.publish();
+  positions_pub_.publish(id_positions);
 #endif
 }
 
