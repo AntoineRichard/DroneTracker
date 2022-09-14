@@ -3,7 +3,7 @@ project(depth_image_extractor)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
-add_compile_options(-std=c++17 -O3 -DPROFILE -DBROWNCONRADY -DDEBUG_KALMAN -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION)
+add_compile_options(-std=c++17 -O3 -DPROFILE -DDEBUG_KALMAN -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION -DDEBUG_TRACKER)
 
 ## Fastest compile options
 #add_compile_options(-std=c++17 -O3)
