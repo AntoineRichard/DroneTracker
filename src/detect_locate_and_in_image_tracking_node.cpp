@@ -207,8 +207,8 @@ void ROSDetector::depthCallback(const sensor_msgs::ImageConstPtr& msg){
 }
 
 void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
-  for (unsigned int i=0; i < bboxes.size()+1; i++) {
-    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
+  for (unsigned int i=0; i < bboxes.size(); i++) {
+    for (unsigned int j=0; j < bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -227,9 +227,9 @@ void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& stat
   std::vector<std::vector<float>> state_vec;
   std::vector<float> state(6);
 
-  for (unsigned int i; i < bboxes.size()+1; i++) {
+  for (unsigned int i; i < bboxes.size(); i++) {
     state_vec.clear();
-    for (unsigned int j; j < bboxes[i].size()+1; j++) {
+    for (unsigned int j; j < bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -263,7 +263,6 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   t1_ = ros::Time::now();
   ros::Duration dt = t1_ - t2_; 
   dt_ = (float) (dt.toSec());
-  ROS_INFO("Delta time: %.3f, %.3f, %.3f, %.3f", t1_.toSec(), t2_.toSec(), dt_, dt.toSec());
 #ifdef PROFILE
   auto start_image = std::chrono::system_clock::now();
 #endif
@@ -321,7 +320,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE   
-  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+  for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;

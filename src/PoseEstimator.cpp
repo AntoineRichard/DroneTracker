@@ -104,9 +104,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
 #endif
 
   if (depth_image.empty()) {
-    for (unsigned int i=0; i < bboxes.size()+1; i++) {
+    for (unsigned int i=0; i < bboxes.size(); i++) {
       distance_vector.clear();
-      for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
+      for (unsigned int j=0; j < bboxes[i].size(); j++) {
         if (!bboxes[0][i].valid_) {
           distance_vector.push_back(-1);
           continue;
@@ -118,9 +118,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
   }
 
   size_t reject, keep;
-  for (unsigned int i=0; i < bboxes.size()+1; i++) {
+  for (unsigned int i=0; i < bboxes.size(); i++) {
     distance_vector.clear();
-    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
+    for (unsigned int j=0; j < bboxes[i].size(); j++) {
 #ifdef PROFILE
     start_distance = std::chrono::system_clock::now();
 #endif
@@ -181,9 +181,9 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
   std::vector<std::vector<float>> point_vector;
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
-  for (unsigned int i=0; i < bboxes.size()+1; i++) {
+  for (unsigned int i=0; i < bboxes.size(); i++) {
     point_vector.clear();
-    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
+    for (unsigned int j=0; j < bboxes[i].size(); j++) {
       float theta, phi;
       if (!bboxes[i][j].valid_) {
         point[0] = 0;

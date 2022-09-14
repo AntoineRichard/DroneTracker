@@ -119,8 +119,8 @@ void ROSDetector::padImage(const cv::Mat& image) {
 }
 
 void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
-  for (unsigned int i=0; i < bboxes.size()+1; i++) {
-    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
+  for (unsigned int i=0; i < bboxes.size(); i++) {
+    for (unsigned int j=0; j < bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -189,8 +189,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE   
-  for (unsigned int i=0; i<bboxes.size()+1; i++) {
-    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
+  for (unsigned int i=0; i<bboxes.size(); i++) {
+    for (unsigned int j=0; j<bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -210,8 +210,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   depth_image_extractor::PositionBoundingBox2DArray ros_bboxes;
   depth_image_extractor::PositionBoundingBox2D ros_bbox;
   std::vector<depth_image_extractor::PositionBoundingBox2D> vec_ros_bboxes;
-  for (unsigned int i=0; i<bboxes.size()+1; i++) {
-    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
+  for (unsigned int i=0; i<bboxes.size(); i++) {
+    for (unsigned int j=0; j<bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
@@ -241,8 +241,8 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
   std::vector<depth_image_extractor::PositionID> vec_id_positions;
 
-  for (unsigned int i=0; i<bboxes.size()+1; i++) {
-    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
+  for (unsigned int i=0; i<bboxes.size(); i++) {
+    for (unsigned int j=0; j<bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }

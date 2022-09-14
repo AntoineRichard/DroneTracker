@@ -163,6 +163,7 @@ void ObjectDetector::detectObjects(cv::Mat image, std::vector<std::vector<Boundi
 }
 
 void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>> &bboxes) {
+  bboxes.resize(ObjectClass::NUM_CLASS);
   for (int c = 0; c < ObjectClass::NUM_CLASS; ++c) {
     bboxes[c].reserve(output_size_);
   }
