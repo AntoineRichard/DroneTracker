@@ -1,13 +1,18 @@
 #include <depth_image_extractor/Tracker.h>
 
-Object::Object() : KF_() {  
-}
+Object::Object() : KF_(nullptr) {}
 
-Object::Object(const unsigned int& id, const float& dt, const bool& use_dim, const bool& use_z, const bool& use_vel, const std::vector<float>& Q, const std::vector<float>& R) : KF_() {
-  KF_ = new KalmanFilter(dt, use_dim, use_z, use_vel, Q, R);
+Object::Object(const unsigned int& id, const float& dt, const bool& use_dim,
+               const bool& use_vel, const std::vector<float>& Q,
+               const std::vector<float>& R) : KF_(nullptr) {
+  KF_ = new BaseKalmanFilter(dt, use_dim, use_vel, Q, R);
   id_ = id;
   nb_frames_ = 0;
   nb_skipped_frames_ = 0;
+}
+
+Object::~Object() {
+  delete KF_;
 }
 
 void Object::setState(const std::vector<float>& state){
@@ -44,18 +49,42 @@ int Object::getSkippedFrames() {
   return nb_skipped_frames_;
 }
 
+Object2D::Object2D() {}
 
-
-Tracker::Tracker() : HA_() {
-
+Object2D::Object2D(const unsigned int& id, const float& dt, const bool& use_dim,
+                   const bool& use_vel, const std::vector<float>& Q,
+                   const std::vector<float>& R) {
+  KF_ = new KalmanFilter2D(dt, use_dim, use_vel, Q, R);
+  std::vector<float> vec(6);
+  KF_->resetFilter(vec);
+  setState(vec);
+  id_ = id;
+  nb_frames_ = 0;
+  nb_skipped_frames_ = 0;
 }
 
-Tracker::Tracker(const int& max_frames_to_skip, const float& dist_treshold, const float& center_threshold,
-                 const float& area_threshold, const float& body_ratio, const float& dt, const bool& use_dim,
-                 const bool& use_z, const bool& use_vel, const std::vector<float>& Q, const std::vector<float>& R) : HA_() {
+Object3D::Object3D() : Object::Object() {}
+
+Object3D::Object3D(const unsigned int& id, const float& dt, const bool& use_dim,
+                   const bool& use_vel, const std::vector<float>& Q,
+                   const std::vector<float>& R) {
+  KF_ = new KalmanFilter3D(dt, use_dim, use_vel, Q, R);
+  id_ = id;
+  nb_frames_ = 0;
+  nb_skipped_frames_ = 0;
+}
+
+BaseTracker::BaseTracker() : HA_() {}
+
+
+BaseTracker::BaseTracker(const int& max_frames_to_skip, const float& dist_treshold,
+                         const float& center_threshold, const float& area_threshold,
+                         const float& body_ratio, const float& dt, const bool& use_dim,
+                         const bool& use_vel, const std::vector<float>& Q,
+                         const std::vector<float>& R) : HA_(nullptr) {
 
   max_frames_to_skip_ = max_frames_to_skip;
-  dist_threshold_ = dist_treshold;
+  distance_threshold_ = dist_treshold;
   center_threshold_ = center_threshold;
   area_threshold_ = area_threshold;
   body_ratio_ = body_ratio;
@@ -63,44 +92,49 @@ Tracker::Tracker(const int& max_frames_to_skip, const float& dist_treshold, cons
   Q_ = Q;
   R_ = R;
   use_dim_ = use_dim;
-  use_z_ = use_z;
   use_vel_ = use_vel;
   dt_ = dt;
 
   track_id_count_ = 0;
 }
 
-void Tracker::getStates(std::map<int, std::vector<float>>& tracks){
-  std::vector<float> state(8); 
+Tracker2D::Tracker2D(const int& max_frames_to_skip, const float& dist_treshold,
+                     const float& center_threshold, const float& area_threshold,
+                     const float& body_ratio, const float& dt, const bool& use_dim,
+                     const bool& use_vel, const std::vector<float>& Q,
+                     const std::vector<float>& R) : BaseTracker::BaseTracker(max_frames_to_skip,
+                     dist_treshold, center_threshold, area_threshold, body_ratio,
+                     dt, use_dim, use_vel, Q, R) {}
+
+Tracker3D::Tracker3D(const int& max_frames_to_skip, const float& dist_treshold,
+                     const float& center_threshold, const float& area_threshold,
+                     const float& body_ratio, const float& dt, const bool& use_dim,
+                     const bool& use_vel, const std::vector<float>& Q,
+                     const std::vector<float>& R) : BaseTracker::BaseTracker(max_frames_to_skip,
+                     dist_treshold, center_threshold, area_threshold, body_ratio,
+                     dt, use_dim, use_vel, Q, R) {}
+
+
+void BaseTracker::getStates(std::map<int, std::vector<float>>& tracks){
+  std::vector<float> state; 
   for (auto & element : Objects_) {
     element.second->getState(state);
     tracks[element.first] = state;
   }
 }
 
-void Tracker::incrementFrame(){
+void BaseTracker::incrementFrame(){
   //for (const std::pair<unsigned int, *Object>& element : Drones_) {
   for (auto & element : Objects_) {
     element.second->newFrame();
   }
 }
 
-float Tracker::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
-   return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]) + (s1[2] - s2[2])*(s1[2] - s2[2]));
-}
 
-float Tracker::areaRatio(const std::vector<float>& s1, const std::vector<float>& s2) const {
-  return (s1[6]*s1[7]) / (s2[6]*s2[7]);
-}
-
-float Tracker::bodyShapeError(const std::vector<float>& s1, const std::vector<float>& s2) const {
-  return (s1[6]/s1[7]) / (s2[6]/s2[7]);
-}
-
-bool Tracker::isMatch(const std::vector<float>& s1, const std::vector<float>& s2) const {
-  ROS_INFO("centroidError: %.3f, %.3f",centroidsError(s1,s2), center_threshold_);
+bool BaseTracker::isMatch(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  printf("[DEBUG] Tracker::%s::l%d centroidError: %.3f, %.3f\n",__func__,__LINE__,centroidsError(s1,s2), center_threshold_);
   if (centroidsError(s1,s2) < center_threshold_) {
-    ROS_INFO("areaRatio: %.3f, %.3f",areaRatio(s1,s2), area_threshold_);
+    printf("[DEBUG] Tracker::%s::l%d areaRatio: %.3f, %.3f\n",__func__,__LINE__,areaRatio(s1,s2), area_threshold_);
     if ((1/area_threshold_ < areaRatio(s1,s2)) && (areaRatio(s1,s2) < area_threshold_)) {
       return true;
     }
@@ -108,16 +142,16 @@ bool Tracker::isMatch(const std::vector<float>& s1, const std::vector<float>& s2
   return false;
 }
 
-void Tracker::computeCost(std::vector<std::vector<double>>& cost, const std::vector<std::vector<float>>& states, std::map<int, int>& tracker_mapping) {
+void BaseTracker::computeCost(std::vector<std::vector<double>>& cost, const std::vector<std::vector<float>>& states, std::map<int, int>& tracker_mapping) {
   cost.resize(Objects_.size(), std::vector<double>(states.size()));
   unsigned int i = 0;
-  std::vector<float> state(8);
+  std::vector<float> state(states[0].size());
   
   for (auto & element : Objects_) {
     tracker_mapping[i] = element.first;
     for (unsigned int j=0; j<states.size(); j++) {
       element.second->getState(state);
-      if (centroidsError(state,states[j]) < 200.f) {
+      if (centroidsError(state,states[j]) < distance_threshold_) {
         cost[i][j] = (double) centroidsError(state,states[j]);
       } else {
         cost[i][j] = 1e6;
@@ -127,20 +161,23 @@ void Tracker::computeCost(std::vector<std::vector<double>>& cost, const std::vec
   }
 }
 
-void Tracker::hungarianMatching(std::vector<std::vector<double>>& cost, std::vector<int>& assignments) {
+void BaseTracker::hungarianMatching(std::vector<std::vector<double>>& cost, std::vector<int>& assignments) {
   HA_->Solve(cost, assignments);
 }
 
-void Tracker::update(const float& dt, const std::vector<std::vector<float>>& states){
+void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>& states){
+  if (states.empty()) {
+    return;
+  }
   std::vector<std::vector<double>> cost;
   std::map<int, int> tracks_mapping;
   std::vector<int> assignments;
-  std::vector<float> state(8);
+  std::vector<float> state(states[0].size());
   std::vector<int> unassigned_tracks;
   std::vector<int> unassigned_detections;
 
   // Update the Kalman filters
-  ROS_INFO("Updating Kalman filters.");
+  printf("[DEBUG] Tracker::%s::l%d Updating Kalman filters.\n", __func__, __LINE__);
   for (auto & element : Objects_) {
     element.second->predict(dt);
   }
@@ -148,54 +185,51 @@ void Tracker::update(const float& dt, const std::vector<std::vector<float>>& sta
   // Increment the number of frames.
   incrementFrame();
 
-  if (states.empty()) {
-    return;
-  }
-
   // If tracks are empty, then create some new tracks.
   if (Objects_.empty()) {
-    ROS_INFO("Creating new tracks.");
+    printf("[DEBUG] Tracker::%s::l%d Creating new tracks.\n", __func__, __LINE__);
     for (unsigned int i=0; i < states.size(); i++) {
-      Objects_.insert(std::make_pair(track_id_count_, new Object(track_id_count_, dt_, use_dim_, use_z_, use_vel_, Q_, R_)));
+      addNewObject();
       Objects_[track_id_count_]->setState(states[i]);
       track_id_count_ ++;
     }
   }
 
   // Match the new detections with the current tracks.
-  ROS_INFO("Computing cost");
+  printf("[DEBUG] Tracker::%s::l%d Computing cost\n", __func__, __LINE__);
   for (unsigned int i=0; i < states.size(); i++) {
-    ROS_INFO("state %d:", i);
+    printf("[DEBUG] Tracker::%s::l%d state %d:\n", __func__, __LINE__, i);
     for (unsigned int j=0; j < states[i].size(); j++) {
-      ROS_INFO(" + state %d-%d: %.3f",i,j,states[i][j]);
+      printf("[DEBUG] Tracker::%s::l%d  + state %d-%d: %.3f\n", __func__, __LINE__,i,j,states[i][j]);
     }
   }
   unsigned int i = 0;
   for (auto & element : Objects_) {
-    ROS_INFO("kalman states %d:", element.first);
+    printf("[DEBUG] Tracker::%s::l%d kalman states %d:\n", __func__, __LINE__, element.first);
     element.second->getState(state);
     for (unsigned int j=0; j < state.size(); j++) {
-      ROS_INFO(" + kalman state %d-%d: %.3f",i,j,state[j]);
+      printf("[DEBUG] Tracker::%s::l%d  + kalman state %d-%d: %.3f\n", __func__, __LINE__,i,j,state[j]);
     } 
+    printf("[DEBUG] Tracker::%s::l%d kalman states %d:\n", __func__, __LINE__, element.first);
     i ++;
   }
   computeCost(cost, states, tracks_mapping); 
-  ROS_INFO("Performing matching");
+  printf("[DEBUG] Tracker::%s::l%d Performing matching\n", __func__, __LINE__);
   for (unsigned int i=0; i < cost.size(); i++) {
-    ROS_INFO("cost %d:", i);
+    printf("[DEBUG] Tracker::%s::l%d cost %d:\n", __func__, __LINE__, i);
     for (unsigned int j=0; j < cost[i].size(); j++) {
-      ROS_INFO(" + cost %d-%d: %.3f",i,j,cost[i][j]);
+      printf("[DEBUG] Tracker::%s::l%d  + cost %d-%d: %.3f\n", __func__, __LINE__,i,j,cost[i][j]);
     }
   }
   hungarianMatching(cost, assignments);
-  ROS_INFO("assignments are:");
+  printf("[DEBUG] Tracker::%s::l%d assignments are:\n", __func__, __LINE__);
   for (unsigned int i=0; i<assignments.size();i++) {
-    ROS_INFO(" + matching track raw %d with detection %d.",i,assignments[i]);
-    ROS_INFO(" + matching track %d with detection %d.",tracks_mapping[i],assignments[i]);
+    printf("[DEBUG] Tracker::%s::l%d  + matching track raw %d with detection %d.\n", __func__, __LINE__,i,assignments[i]);
+    printf("[DEBUG] Tracker::%s::l%d  + matching track %d with detection %d.\n", __func__, __LINE__,tracks_mapping[i],assignments[i]);
   }
 
   // Check for unassigned tracks
-  ROS_INFO("Cheking for unassigned tracks.");
+  printf("[DEBUG] Tracker::%s::l%d Cheking for unassigned tracks.\n", __func__, __LINE__);
   for (unsigned int i=0; i < assignments.size(); i++) {
     if (assignments[i] == -1) {
       unassigned_tracks.push_back(i);
@@ -210,7 +244,7 @@ void Tracker::update(const float& dt, const std::vector<std::vector<float>>& sta
   }
 
   // Check for unassigned detections
-  ROS_INFO("Cheking for unassigned detections.");
+  printf("[DEBUG] Tracker::%s::l%d Cheking for unassigned detections.\n", __func__, __LINE__);
   bool assigned;
   for (unsigned int i=0; i < states.size(); i++) {
     assigned = false;
@@ -224,8 +258,31 @@ void Tracker::update(const float& dt, const std::vector<std::vector<float>>& sta
     }
   }
 
+
+  // Start new tracks
+  printf("[DEBUG] Tracker::%s::l%d Starting new tracks.\n", __func__, __LINE__);
+  for (unsigned int i=0; i < unassigned_detections.size(); i++) {
+    addNewObject();
+    Objects_[track_id_count_]->setState(states[unassigned_detections[i]]);
+    track_id_count_ ++;
+  }
+
+  // Correct the Kalman filters
+  printf("[DEBUG] Tracker::%s::l%d Correcting filters.\n", __func__, __LINE__);
+  for (unsigned int i=0; i < assignments.size(); i++) {
+    printf("[DEBUG] Tracker::%s::l%d running for 1\n", __func__, __LINE__);
+    if (assignments[i] != -1) {
+      printf("[DEBUG] Tracker::%s::l%d assignment is ok\n", __func__, __LINE__);
+      printf("[DEBUG] Tracker::%s::l%d %d\n", __func__, __LINE__, assignments[i]);
+      printf("[DEBUG] Tracker::%s::l%d %d\n", __func__, __LINE__, tracks_mapping[i]);
+      printf("[DEBUG] Tracker::%s::l%d %d\n", __func__, __LINE__, Objects_[tracks_mapping[i]]->getSkippedFrames());
+      printf("[DEBUG] Tracker::%s::l%d %ld\n", __func__, __LINE__, Objects_.size());
+      Objects_[tracks_mapping[i]]->correct(states[assignments[i]]);
+    }
+  }
+
   // Remove old tracks
-  ROS_INFO("Removing old tracks.");
+  printf("[DEBUG] Tracker::%s::l%d Removing old tracks.\n", __func__, __LINE__);
   for (auto it = Objects_.cbegin(); it != Objects_.cend();)
   {
     if (it->second->getSkippedFrames() > max_frames_to_skip_)
@@ -238,20 +295,41 @@ void Tracker::update(const float& dt, const std::vector<std::vector<float>>& sta
     }
   }
 
-  // Start new tracks
-  ROS_INFO("Starting new tracks.");
-  for (unsigned int i=0; i < unassigned_detections.size(); i++) {
-    Objects_.insert(std::make_pair(track_id_count_, new Object(track_id_count_, dt_, use_dim_, use_z_, use_vel_, Q_, R_)));
-    Objects_[track_id_count_]->setState(states[unassigned_detections[i]]);
-    track_id_count_ ++;
-  }
+  printf("[DEBUG] Tracker::%s::l%d Num tracks %d\n", __func__, __LINE__, track_id_count_); 
+}
 
-  // Correct the Kalman filters
-  ROS_INFO("Correcting filters.");
-  for (unsigned int i=0; i < assignments.size(); i++) {
-    if (assignments[i] != -1) {
-      Objects_[tracks_mapping[i]]->correct(states[assignments[i]]);
-    }
-  }
-  ROS_INFO("Num tracks %d", track_id_count_); 
+float BaseTracker::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
+   return 0.0;
+}
+
+float BaseTracker::areaRatio(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  return 0.0;
+}
+
+void BaseTracker::addNewObject() {
+  Objects_.insert(std::make_pair(track_id_count_, new Object(track_id_count_, dt_, use_dim_, use_vel_, Q_, R_)));
+}
+
+float Tracker2D::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
+   return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]));
+}
+
+float Tracker2D::areaRatio(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  return (s1[4]*s1[5]) / (s2[4]*s2[5]);
+}
+
+void Tracker2D::addNewObject() {
+  Objects_.insert(std::make_pair(track_id_count_, new Object2D(track_id_count_, dt_, use_dim_, use_vel_, Q_, R_)));
+}
+
+float Tracker3D::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
+   return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]) + (s1[2] - s2[2])*(s1[2] - s2[2]));
+}
+
+float Tracker3D::areaRatio(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  return (s1[6]*s1[7]) / (s2[6]*s2[7]);
+}
+
+void Tracker3D::addNewObject() {
+  Objects_.insert(std::make_pair(track_id_count_, new Object3D(track_id_count_, dt_, use_dim_, use_vel_, Q_, R_)));
 }
