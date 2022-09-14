@@ -6,6 +6,13 @@
 #include <depth_image_extractor/ObjectDetection.h>
 #include <depth_image_extractor/Tracker.h>
 
+#include <depth_image_extractor/BoundingBox2D.h>
+#include <depth_image_extractor/BoundingBoxes2D.h>
+#include <depth_image_extractor/PositionBoundingBox2D.h>
+#include <depth_image_extractor/PositionBoundingBox2DArray.h>
+#include <depth_image_extractor/PositionID.h>
+#include <depth_image_extractor/PositionIDArray.h>
+
 // ROS
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
@@ -15,8 +22,7 @@
 #include <std_msgs/Float32.h>
 #include <image_transport/image_transport.h>
 #include <ros/ros.h>
-
-# define M_PI           3.14159265358979323846  /* pi */
+#include <tf/transform_listener.h>
 
 class ROSDetector {
   private:
@@ -25,14 +31,17 @@ class ROSDetector {
 
     image_transport::Subscriber image_sub_;
     image_transport::Subscriber depth_sub_;
+#ifdef PUBLISH_DETECTION_IMAGE   
     image_transport::Publisher detection_pub_;
     image_transport::Publisher tracker_pub_;
+#endif
     ros::Subscriber depth_info_sub_;
-    ros::Subscriber camera_pose_sub_;
-    ros::Subscriber drone_pose_sub_;
-    ros::Publisher drone_distance_opt_pub_;
-    ros::Publisher drone_distance_rs2_pub_;
-    ros::Publisher drone_relative_pose_pub_;
+#ifdef PUBLISH_DETECTION_WITH_POSITION
+    ros::Publisher positions_bboxes_pub_;
+#else
+    ros::Publisher bboxes_pub_;
+    ros::Publisher positions_pub_;
+#endif
 
     // Image parameters
     int image_size_;
@@ -43,6 +52,10 @@ class ROSDetector {
     cv::Mat padded_image_;
     cv::Mat depth_image_;
     sensor_msgs::ImagePtr image_ptr_out_;
+
+    // Transform parameters
+    tf::TransformListener listener_;
+    std::string global_frame_;
 
     // Tracker parameters
     std::vector<float> Q_;
@@ -68,20 +81,17 @@ class ROSDetector {
     // Position estimation
     geometry_msgs::PoseStamped camera_pos_;
     geometry_msgs::PoseStamped drone_pos_;
-    float cam2drone_;
 
     ObjectDetector* OD_;
     PoseEstimator* PE_;
-    Tracker* TR_;
+    Tracker2D* TR_;
 
     void imageCallback(const sensor_msgs::ImageConstPtr&);
     void depthCallback(const sensor_msgs::ImageConstPtr&);
-    void cameraPoseCallback(const geometry_msgs::PoseStampedConstPtr&);
-    void dronePoseCallback(const geometry_msgs::PoseStampedConstPtr&);
     void depthInfoCallback(const sensor_msgs::CameraInfoConstPtr&);
-    void cast2states(std::vector<std::vector<float>>&,
+    void cast2states(std::vector<std::vector<std::vector<float>>>&,
                      const std::vector<std::vector<BoundingBox>>&,
-                     const std::vector<std::vector<float>>&);
+                     const std::vector<std::vector<std::vector<float>>>&);
     void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
     void padImage(const cv::Mat&);
 
@@ -91,68 +101,76 @@ class ROSDetector {
 };
 
 ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_(), TR_() {
+  // Object detector parameters
   float nms_tresh, conf_tresh;
-  int max_output_bbox_count;
-  
+  int max_output_bbox_count; 
   std::string default_path_to_engine("None");
   std::string path_to_engine;
-
-  Q_.resize(8);
-  R_.resize(8);
-
-  nh_.param("nms_tresh",nms_tresh,0.45f);
-  nh_.param("image_size",image_size_,640);
-  nh_.param("conf_tresh",conf_tresh,0.25f);
+  nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
   nh_.param("image_rows", image_rows_, 480);
   nh_.param("image_cols", image_cols_, 640);
+  nh_.param("nms_tresh",nms_tresh,0.45f);
+  nh_.param("conf_tresh",conf_tresh,0.25f);
   nh_.param("max_output_bbox_count", max_output_bbox_count, 1000);
-  nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
+
+  // Tracker parameters
+  std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
+  std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
+  Q_.resize(6);
+  R_.resize(6);
   nh_.param("max_frames_to_skip", max_frames_to_skip_, 15);
-  nh_.param("dist_threshold", dist_threshold_, 54.0f);
+  nh_.param("dist_threshold", dist_threshold_, 150.0f);
   nh_.param("center_threshold", center_threshold_, 80.0f);
   nh_.param("area_threshold", area_threshold_, 3.0f);
   nh_.param("body_ration", body_ratio_, 0.5f);
   nh_.param("dt", dt_, 0.02f);
   nh_.param("use_dim", use_dim_, true);
-  nh_.param("use_z", use_z_, false);
-  nh_.param("Q0", Q_[0], 3.0f);
-  nh_.param("Q1", Q_[1], 3.0f);
-  nh_.param("Q2", Q_[2], 0.3f);
-  nh_.param("Q3", Q_[3], 3.0f);
-  nh_.param("Q4", Q_[4], 3.0f);
-  nh_.param("Q5", Q_[5], 0.3f);
-  nh_.param("Q6", Q_[6], 5.0f);
-  nh_.param("Q7", Q_[7], 5.0f);
-  nh_.param("R0", R_[0], 5.0f);
-  nh_.param("R1", R_[1], 5.0f);
-  nh_.param("R2", R_[2], 0.3f);
-  nh_.param("R3", R_[3], 5.0f);
-  nh_.param("R4", R_[4], 5.0f);
-  nh_.param("R5", R_[5], 0.3f);
-  nh_.param("R6", R_[6], 3.0f);
-  nh_.param("R7", R_[7], 5.0f);
+  nh_.param("use_vel", use_vel_, false);
+  nh_.param("Q", Q_, default_Q);
+  nh_.param("R", R_, default_R);
   nh_.param("max_bbox_width", max_bbox_width_, 400.0f);
   nh_.param("max_bbox_height", max_bbox_height_, 300.0f);
   nh_.param("min_bbox_width", min_bbox_width_, 60.0f);
   nh_.param("min_bbox_height", min_bbox_height_, 60.0f);
+  /*nh_.param("Q0", Q_[0], 9.0f);
+  nh_.param("Q1", Q_[1], 9.0f);
+  nh_.param("Q2", Q_[2], 0.2f);
+  nh_.param("Q3", Q_[3], 200.0f);
+  nh_.param("Q4", Q_[4], 200.0f);
+  nh_.param("Q5", Q_[5], 0.2f);
+  nh_.param("Q6", Q_[6], 5.0f);
+  nh_.param("Q7", Q_[7], 5.0f);
+  nh_.param("R0", R_[0], 2.0f);
+  nh_.param("R1", R_[1], 2.0f);
+  nh_.param("R2", R_[2], 0.2f);
+  nh_.param("R3", R_[3], 200.0f);
+  nh_.param("R4", R_[4], 200.0f);
+  nh_.param("R5", R_[5], 0.2f);
+  nh_.param("R6", R_[6], 2.0f);
+  nh_.param("R7", R_[7], 2.0f);*/
+
+  image_size_ = std::max(image_cols_, image_rows_);
+  padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
   OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
   PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
-  TR_ = new Tracker(max_frames_to_skip_, dist_threshold_, center_threshold_,
+  TR_ = new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
                     area_threshold_, body_ratio_, dt_, use_dim_,
-                    use_z_, use_vel_, Q_, R_);
-  
-  padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
-  cam2drone_ = 0;
+                    use_vel_, Q_, R_); 
 
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetector::imageCallback, this);
   depth_sub_ = it_.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &ROSDetector::depthCallback, this);
   depth_info_sub_ = nh_.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &ROSDetector::depthInfoCallback, this);
-  camera_pose_sub_ = nh_.subscribe("/vrpn_client_node/CAM/pose", 1, &ROSDetector::cameraPoseCallback, this);
-  drone_pose_sub_ = nh_.subscribe("/vrpn_client_node/UAV/pose", 1, &ROSDetector::dronePoseCallback, this);
+#ifdef PUBLISH_DETECTION_IMAGE
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
   tracker_pub_ = it_.advertise("/detection/tracking", 1);
-  drone_relative_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/detection/pose", 1);
+#endif
+#ifdef PUBLISH_DETECTION_WITH_POSITION
+  positions_bboxes_pub_ = nh_.advertise<depth_image_extractor::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
+#else
+  positions_pub_ = nh_.advertise<depth_image_extractor::PositionIDArray>("/detection/positions",1);
+  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBox2D>("/detection/bounding_boxes", 1);
+#endif
   t1_ = ros::Time::now();
 }
 
@@ -172,17 +190,6 @@ void ROSDetector::padImage(const cv::Mat& image) {
   }
 }
 
-void ROSDetector::cameraPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg) {
-  camera_pos_ = *msg;
-}
-
-void ROSDetector::dronePoseCallback(const geometry_msgs::PoseStampedConstPtr& msg) {
-  drone_pos_ = *msg;
-  cam2drone_ = std::sqrt((drone_pos_.pose.position.x - camera_pos_.pose.position.x) * (drone_pos_.pose.position.x - camera_pos_.pose.position.x) +
-                        (drone_pos_.pose.position.y - camera_pos_.pose.position.y) * (drone_pos_.pose.position.y - camera_pos_.pose.position.y) +
-                        (drone_pos_.pose.position.z - camera_pos_.pose.position.z) * (drone_pos_.pose.position.z - camera_pos_.pose.position.z));
-}
-
 void ROSDetector::depthInfoCallback(const sensor_msgs::CameraInfoConstPtr& msg){
   PE_->updateCameraParameters(msg->K[2], msg->K[5], msg->K[0], msg->K[4], msg->D);
 }
@@ -200,49 +207,54 @@ void ROSDetector::depthCallback(const sensor_msgs::ImageConstPtr& msg){
 }
 
 void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
-  for (unsigned int j=0; j < bboxes[0].size(); j++) {
-      if (!bboxes[0][j].valid_) {
+  for (unsigned int i=0; i < bboxes.size()+1; i++) {
+    for (unsigned int j=0; j < bboxes[i].size()+1; j++) {
+      if (!bboxes[i][j].valid_) {
         continue;
       }
-    bboxes[0][j].x_ -= padding_cols_;
-    bboxes[0][j].y_ -= padding_rows_;
-    bboxes[0][j].x_min_ = std::max(bboxes[0][j].x_ - bboxes[0][j].w_/2, (float) 0.0);
-    bboxes[0][j].x_max_ = std::min(bboxes[0][j].x_ + bboxes[0][j].w_/2, (float) image_cols_);
-    bboxes[0][j].y_min_ = std::max(bboxes[0][j].y_ - bboxes[0][j].h_/2, (float) 0.0);
-    bboxes[0][j].y_max_ = std::min(bboxes[0][j].y_ + bboxes[0][j].h_/2, (float) image_rows_);
+      bboxes[i][j].x_ -= padding_cols_;
+      bboxes[i][j].y_ -= padding_rows_;
+      bboxes[i][j].x_min_ = std::max(bboxes[i][j].x_ - bboxes[i][j].w_/2, (float) 0.0);
+      bboxes[i][j].x_max_ = std::min(bboxes[i][j].x_ + bboxes[i][j].w_/2, (float) image_cols_);
+      bboxes[i][j].y_min_ = std::max(bboxes[i][j].y_ - bboxes[i][j].h_/2, (float) 0.0);
+      bboxes[i][j].y_max_ = std::min(bboxes[i][j].y_ + bboxes[i][j].h_/2, (float) image_rows_);
+    }
   }
 }
 
-void ROSDetector::cast2states(std::vector<std::vector<float>>& states, const std::vector<std::vector<BoundingBox>>& bboxes, const std::vector<std::vector<float>>& points) {
+void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& states, const std::vector<std::vector<BoundingBox>>& bboxes, const std::vector<std::vector<std::vector<float>>>& points) {
   states.clear();
-  std::vector<float> state(8);
+  std::vector<std::vector<float>> state_vec;
+  std::vector<float> state(6);
 
-  for (unsigned int i; i < points.size(); i++) {
-    if (!bboxes[0][i].valid_) {
-      continue;
+  for (unsigned int i; i < bboxes.size()+1; i++) {
+    state_vec.clear();
+    for (unsigned int j; j < bboxes[i].size()+1; j++) {
+      if (!bboxes[i][j].valid_) {
+        continue;
+      }
+      if (bboxes[i][j].h_ > max_bbox_height_) {
+        continue;
+      }
+      if (bboxes[i][j].w_ > max_bbox_width_) {
+        continue;
+      }
+      if (bboxes[i][j].h_ < min_bbox_height_) {
+        continue;
+      }
+      if (bboxes[i][j].w_ < min_bbox_width_) {
+        continue;
+      }
+      state[0] = bboxes[i][j].x_;
+      state[1] = bboxes[i][j].y_;
+      state[2] = 0;
+      state[3] = 0;
+      state[4] = bboxes[i][j].h_;
+      state[5] = bboxes[i][j].w_;
+      state_vec.push_back(state);
+      ROS_INFO("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", i, state[0], state[1], state[2], state[3], state[4], state[5]);
     }
-    if (bboxes[0][i].h_ > max_bbox_height_) {
-      continue;
-    }
-    if (bboxes[0][i].w_ > max_bbox_width_) {
-      continue;
-    }
-    if (bboxes[0][i].h_ < min_bbox_height_) {
-      continue;
-    }
-    if (bboxes[0][i].w_ < min_bbox_width_) {
-      continue;
-    }
-    state[0] = bboxes[0][i].x_;
-    state[1] = bboxes[0][i].y_;
-    state[2] = points[0][2];
-    state[3] = 0;
-    state[4] = 0;
-    state[5] = 0;
-    state[6] = bboxes[0][i].h_;
-    state[7] = bboxes[0][i].w_;
-    states.push_back(state);
-    ROS_INFO("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", i, state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7]);
+    states.push_back(state_vec);
   }
 }
 
@@ -277,77 +289,65 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   auto end_detection = std::chrono::system_clock::now();
   auto start_distance = std::chrono::system_clock::now();
 #endif
-  std::vector<float> distances;
+  std::vector<std::vector<float>> distances;
   distances = PE_->extractDistanceFromDepth(depth_image_, bboxes);
 #ifdef PROFILE
   auto end_distance = std::chrono::system_clock::now();
   auto start_position = std::chrono::system_clock::now();
 #endif
-  std::vector<std::vector<float>> points;
+  std::vector<std::vector<std::vector<float>>> points;
   points = PE_->estimatePosition(distances, bboxes);
 #ifdef PROFILE
   auto end_position = std::chrono::system_clock::now();
   auto start_tracking = std::chrono::system_clock::now();
 #endif 
-  std::vector<std::vector<float>> states;
+  std::vector<std::vector<std::vector<float>>> states;
   cast2states(states, bboxes, points);
-  TR_->update(dt_, states);
+  // We only track class 0, to track more than class zero, one just needs to create a vector of trackers.
+  std::vector<std::vector<float>> states_to_track;
+  states_to_track = states[0];
+  TR_->update(dt_, states_to_track);
   std::map<int, std::vector<float>> tracker_states;
   TR_->getStates(tracker_states);
+
 #ifdef PROFILE
   auto end_tracking = std::chrono::system_clock::now();
-  ROS_INFO("Full inference done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_tracking - start_image).count());
-  ROS_INFO(" - Image processing done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
-  ROS_INFO(" - Object detection done in %d ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
-  ROS_INFO(" - Distance estimation done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
-  ROS_INFO(" - Position estimation done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_position - start_position).count());
-  ROS_INFO(" - Tracking done in %d us", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking - start_tracking).count());
+  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_tracking - start_image).count());
+  ROS_INFO(" - Image processing done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
+  ROS_INFO(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
+  ROS_INFO(" - Distance estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+  ROS_INFO(" - Position estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_position - start_position).count());
+  ROS_INFO(" - Tracking done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking - start_tracking).count());
 #endif
-  ROS_INFO("Raw measurments:");
-  for (unsigned int i=0; i<distances.size(); i++){
-    if (!bboxes[0][i].valid_) {
-      continue;
-    }
-    ROS_INFO(" - Object %d:",i);
-    ROS_INFO("   + Estimated distance: %.3f",distances[i]);
-    ROS_INFO("   + Measured distance:  %.3f",cam2drone_);
-    ROS_INFO("   + Estimated position: x %.3f y %.3f z %.3f",points[i][0],points[i][1],points[i][2]);
-  }
 
-  for (unsigned int i=0; i<bboxes[0].size(); i++) {
-    if (!bboxes[0][i].valid_) {
-      continue;
+#ifdef PUBLISH_DETECTION_IMAGE   
+  for (unsigned int i=0; i<bboxes.size()+1; i++) {
+    for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
+      if (!bboxes[i][j].valid_) {
+        continue;
+      }
+      const cv::Rect rect(bboxes[i][j].x_min_, bboxes[i][j].y_min_, bboxes[i][j].w_, bboxes[i][j].h_);
+      cv::rectangle(image, rect, ColorPalette[0], 3);
+      cv::putText(image, ClassMap[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
     }
-    //const cv::Rect rect(bbox.x_min_ - padding_cols_, bbox.y_min_-padding_rows_, bbox.w_, bbox.h_);
-    const cv::Rect rect(bboxes[0][i].x_min_, bboxes[0][i].y_min_, bboxes[0][i].w_, bboxes[0][i].h_);
-    cv::rectangle(image, rect, ColorPalette[0], 3);
-    cv::putText(image, std::to_string(distances[i]), cv::Point(bboxes[0][i].x_min_,bboxes[0][i].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[0], 2);
   }
-
+  
   for (auto & element : tracker_states) {
     cv::Rect rect(element.second[0] - element.second[7]/2, element.second[1]-element.second[6]/2, element.second[7], element.second[6]);
     cv::rectangle(image_tracker, rect, ColorPalette[element.first % 24], 3);
     cv::putText(image_tracker, std::to_string(element.first), cv::Point(element.second[0]-element.second[7]/2,element.second[1]-element.second[6]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
   }
   
-  //image.convertTo(image, CV_8UC3, 255.0f);
   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
   std_msgs::Header image_ptr_out_header;
   image_ptr_out_header.stamp = ros::Time::now();
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image).toImageMsg();
   detection_pub_.publish(image_ptr_out_);
-  
+    
   cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
   tracker_pub_.publish(image_ptr_out_);
-
-  if (points.size() > 0) {
-    geometry_msgs::PoseStamped pose;
-    pose.pose.position.x = points[0][0];
-    pose.pose.position.y = points[0][1];
-    pose.pose.position.z = points[0][2];
-    drone_relative_pose_pub_.publish(pose);
-  }
+#endif
 }
 
 int main(int argc, char** argv)

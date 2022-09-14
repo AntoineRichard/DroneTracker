@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   std_msgs
   message_generation
+  tf
 )
 
 find_package(OpenCV REQUIRED)
