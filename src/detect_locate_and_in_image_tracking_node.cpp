@@ -84,7 +84,7 @@ class ROSDetector {
 
     ObjectDetector* OD_;
     PoseEstimator* PE_;
-    Tracker2D* TR_;
+    std::vector<Tracker2D*> Trackers_;
 
     void imageCallback(const sensor_msgs::ImageConstPtr&);
     void depthCallback(const sensor_msgs::ImageConstPtr&);
@@ -100,7 +100,7 @@ class ROSDetector {
     ~ROSDetector();
 };
 
-ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_(), TR_() {
+ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   // Object detector parameters
   float nms_tresh, conf_tresh;
   int max_output_bbox_count; 
@@ -132,31 +132,17 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_(), TR_() {
   nh_.param("max_bbox_height", max_bbox_height_, 300.0f);
   nh_.param("min_bbox_width", min_bbox_width_, 60.0f);
   nh_.param("min_bbox_height", min_bbox_height_, 60.0f);
-  /*nh_.param("Q0", Q_[0], 9.0f);
-  nh_.param("Q1", Q_[1], 9.0f);
-  nh_.param("Q2", Q_[2], 0.2f);
-  nh_.param("Q3", Q_[3], 200.0f);
-  nh_.param("Q4", Q_[4], 200.0f);
-  nh_.param("Q5", Q_[5], 0.2f);
-  nh_.param("Q6", Q_[6], 5.0f);
-  nh_.param("Q7", Q_[7], 5.0f);
-  nh_.param("R0", R_[0], 2.0f);
-  nh_.param("R1", R_[1], 2.0f);
-  nh_.param("R2", R_[2], 0.2f);
-  nh_.param("R3", R_[3], 200.0f);
-  nh_.param("R4", R_[4], 200.0f);
-  nh_.param("R5", R_[5], 0.2f);
-  nh_.param("R6", R_[6], 2.0f);
-  nh_.param("R7", R_[7], 2.0f);*/
 
   image_size_ = std::max(image_cols_, image_rows_);
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
   OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
   PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
-  TR_ = new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
-                    area_threshold_, body_ratio_, dt_, use_dim_,
-                    use_vel_, Q_, R_); 
+  for (unsigned int i=0; i<ObjectClass::NUM_CLASS; i++){
+    Trackers_.push_back(new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
+                      area_threshold_, body_ratio_, dt_, use_dim_,
+                      use_vel_, Q_, R_)); 
+  }
 
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetector::imageCallback, this);
   depth_sub_ = it_.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &ROSDetector::depthCallback, this);
@@ -301,13 +287,15 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   auto start_tracking = std::chrono::system_clock::now();
 #endif 
   std::vector<std::vector<std::vector<float>>> states;
+  std::vector<std::map<int, std::vector<float>>> tracker_states;
+  tracker_states.resize(ObjectClass::NUM_CLASS);
   cast2states(states, bboxes, points);
-  // We only track class 0, to track more than class zero, one just needs to create a vector of trackers.
-  std::vector<std::vector<float>> states_to_track;
-  states_to_track = states[0];
-  TR_->update(dt_, states_to_track);
-  std::map<int, std::vector<float>> tracker_states;
-  TR_->getStates(tracker_states);
+  for (unsigned int i=0; i < ObjectClass::NUM_CLASS; i++){
+    std::vector<std::vector<float>> states_to_track;
+    states_to_track = states[i];
+    Trackers_[i]->update(dt_, states_to_track);
+    Trackers_[i]->getStates(tracker_states[i]);
+  }
 
 #ifdef PROFILE
   auto end_tracking = std::chrono::system_clock::now();
@@ -331,10 +319,12 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
     }
   }
   
-  for (auto & element : tracker_states) {
-    cv::Rect rect(element.second[0] - element.second[7]/2, element.second[1]-element.second[6]/2, element.second[7], element.second[6]);
-    cv::rectangle(image_tracker, rect, ColorPalette[element.first % 24], 3);
-    cv::putText(image_tracker, std::to_string(element.first), cv::Point(element.second[0]-element.second[7]/2,element.second[1]-element.second[6]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
+  for (unsigned int i=0; i < tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      cv::Rect rect(element.second[0] - element.second[5]/2, element.second[1]-element.second[4]/2, element.second[5], element.second[4]);
+      cv::rectangle(image_tracker, rect, ColorPalette[element.first % 24], 3);
+      cv::putText(image_tracker, ClassMap[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[7]/2,element.second[1]-element.second[6]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
+    }
   }
   
   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
