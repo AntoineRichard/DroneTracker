@@ -3,5 +3,4 @@ image_width: 640
 image_height: 480
 conf_tresh: 0.25
 max_output_bbox_count: 1000
-class_labels:
-  - drones : 0
+classes: {NUM_CLASSES: 1, DRONES: 0}
