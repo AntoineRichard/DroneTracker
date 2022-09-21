@@ -18,11 +18,14 @@
 #include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/Point.h>
 #include <sensor_msgs/CameraInfo.h>
+#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <std_msgs/Float32.h>
 #include <image_transport/image_transport.h>
 #include <ros/ros.h>
-#include <tf/transform_listener.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 class ROSDetector {
   private:
@@ -31,6 +34,8 @@ class ROSDetector {
 
     image_transport::Subscriber image_sub_;
     image_transport::Subscriber depth_sub_;
+    ros::Publisher pose_array_pub_;
+    ros::Subscriber uav_pose_sub_;
 #ifdef PUBLISH_DETECTION_IMAGE   
     image_transport::Publisher detection_pub_;
     image_transport::Publisher tracker_pub_;
@@ -54,7 +59,8 @@ class ROSDetector {
     sensor_msgs::ImagePtr image_ptr_out_;
 
     // Transform parameters
-    tf::TransformListener listener_;
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener listener_;
     std::string global_frame_;
 
     // Tracker parameters
@@ -79,8 +85,8 @@ class ROSDetector {
     ros::Time t2_;   
 
     // Position estimation
-    geometry_msgs::PoseStamped camera_pos_;
-    geometry_msgs::PoseStamped drone_pos_;
+    geometry_msgs::PoseStamped uav_pose_;
+    geometry_msgs::PoseStamped uav_pose_cam_;
 
     ObjectDetector* OD_;
     PoseEstimator* PE_;
@@ -89,9 +95,9 @@ class ROSDetector {
     void imageCallback(const sensor_msgs::ImageConstPtr&);
     void depthCallback(const sensor_msgs::ImageConstPtr&);
     void depthInfoCallback(const sensor_msgs::CameraInfoConstPtr&);
+    void uavPoseCallback(const geometry_msgs::PoseStampedConstPtr&);
     void cast2states(std::vector<std::vector<std::vector<float>>>&,
-                     const std::vector<std::vector<BoundingBox>>&,
-                     const std::vector<std::vector<std::vector<float>>>&);
+                     const std::vector<std::vector<BoundingBox>>&);
     void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
     void padImage(const cv::Mat&);
 
@@ -100,7 +106,7 @@ class ROSDetector {
     ~ROSDetector();
 };
 
-ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
+ROSDetector::ROSDetector() : nh_("~"), listener_(tf_buffer_), it_(nh_), OD_(), PE_() {
   // Object detector parameters
   float nms_tresh, conf_tresh;
   int max_output_bbox_count; 
@@ -132,13 +138,17 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   nh_.param("max_bbox_height", max_bbox_height_, 300.0f);
   nh_.param("min_bbox_width", min_bbox_width_, 60.0f);
   nh_.param("min_bbox_height", min_bbox_height_, 60.0f);
+  
+  // Global position rejection
+  std::vector<std::string> default_tracked_transforms;
 
   image_size_ = std::max(image_cols_, image_rows_);
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
+  // Object instantiation
   OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
-  PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
-  for (unsigned int i=0; i<ObjectClass::NUM_CLASS; i++){
+  PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_); 
+  for (unsigned int i=0; i<ObjectClass::NUM_CLASS; i++){ // Create as many trackers as their are classes
     Trackers_.push_back(new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
                       area_threshold_, body_ratio_, dt_, use_dim_,
                       use_vel_, Q_, R_)); 
@@ -147,6 +157,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetector::imageCallback, this);
   depth_sub_ = it_.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &ROSDetector::depthCallback, this);
   depth_info_sub_ = nh_.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &ROSDetector::depthInfoCallback, this);
+  uav_pose_sub_ = nh_.subscribe("/vrpn_client_node/targetUAV/pose", 1, &ROSDetector::uavPoseCallback, this);
 #ifdef PUBLISH_DETECTION_IMAGE
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
   tracker_pub_ = it_.advertise("/detection/tracking", 1);
@@ -157,6 +168,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   positions_pub_ = nh_.advertise<depth_image_extractor::PositionIDArray>("/detection/positions",1);
   bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBox2D>("/detection/bounding_boxes", 1);
 #endif
+  pose_array_pub_ = nh_.advertise<geometry_msgs::PoseArray>("/detection/pose_array", 1);
   t1_ = ros::Time::now();
 }
 
@@ -191,6 +203,16 @@ void ROSDetector::depthCallback(const sensor_msgs::ImageConstPtr& msg){
   }
   cv_ptr->image.convertTo(depth_image_, CV_32F, 0.001);
 }
+  
+void ROSDetector::uavPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg) {
+  uav_pose_ = *msg;
+  try {
+    //tf_buffer_.lookupTransform("world", "camera_color_optical_frame", ros::Time(0));
+    tf_buffer_.transform(uav_pose_, uav_pose_cam_, "camera_color_optical_frame", ros::Duration(1.0));
+  } catch (tf2::TransformException &ex) {
+    ROS_WARN("%s",ex.what());
+  }
+}
 
 void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
   for (unsigned int i=0; i < bboxes.size(); i++) {
@@ -208,7 +230,7 @@ void ROSDetector::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bbo
   }
 }
 
-void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& states, const std::vector<std::vector<BoundingBox>>& bboxes, const std::vector<std::vector<std::vector<float>>>& points) {
+void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& states, const std::vector<std::vector<BoundingBox>>& bboxes) {
   states.clear();
   std::vector<std::vector<float>> state_vec;
   std::vector<float> state(6);
@@ -235,8 +257,8 @@ void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& stat
       state[1] = bboxes[i][j].y_;
       state[2] = 0;
       state[3] = 0;
-      state[4] = bboxes[i][j].h_;
-      state[5] = bboxes[i][j].w_;
+      state[4] = bboxes[i][j].w_;
+      state[5] = bboxes[i][j].h_;
       state_vec.push_back(state);
       ROS_INFO("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", i, state[0], state[1], state[2], state[3], state[4], state[5]);
     }
@@ -272,33 +294,32 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   adjustBoundingBoxes(bboxes);
 #ifdef PROFILE
   auto end_detection = std::chrono::system_clock::now();
-  auto start_distance = std::chrono::system_clock::now();
-#endif
-  std::vector<std::vector<float>> distances;
-  distances = PE_->extractDistanceFromDepth(depth_image_, bboxes);
-#ifdef PROFILE
-  auto end_distance = std::chrono::system_clock::now();
-  auto start_position = std::chrono::system_clock::now();
-#endif
-  std::vector<std::vector<std::vector<float>>> points;
-  points = PE_->estimatePosition(distances, bboxes);
-#ifdef PROFILE
-  auto end_position = std::chrono::system_clock::now();
   auto start_tracking = std::chrono::system_clock::now();
 #endif 
   std::vector<std::vector<std::vector<float>>> states;
-  std::vector<std::map<int, std::vector<float>>> tracker_states;
+  std::vector<std::map<unsigned int, std::vector<float>>> tracker_states;
   tracker_states.resize(ObjectClass::NUM_CLASS);
-  cast2states(states, bboxes, points);
+  cast2states(states, bboxes);
   for (unsigned int i=0; i < ObjectClass::NUM_CLASS; i++){
     std::vector<std::vector<float>> states_to_track;
     states_to_track = states[i];
     Trackers_[i]->update(dt_, states_to_track);
     Trackers_[i]->getStates(tracker_states[i]);
   }
-
 #ifdef PROFILE
   auto end_tracking = std::chrono::system_clock::now();
+  auto start_distance = std::chrono::system_clock::now();
+#endif
+  std::vector<std::map<unsigned int, float>> distances;
+  distances = PE_->extractDistanceFromDepth(depth_image_, tracker_states);
+#ifdef PROFILE
+  auto end_distance = std::chrono::system_clock::now();
+  auto start_position = std::chrono::system_clock::now();
+#endif
+  std::vector<std::map<unsigned int, std::vector<float>>> points;
+  points = PE_->estimatePosition(distances, tracker_states);
+#ifdef PROFILE
+  auto end_position = std::chrono::system_clock::now();
   ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_tracking - start_image).count());
   ROS_INFO(" - Image processing done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_image - start_image).count());
   ROS_INFO(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection - start_detection).count());
@@ -307,7 +328,12 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   ROS_INFO(" - Tracking done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking - start_tracking).count());
 #endif
 
-#ifdef PUBLISH_DETECTION_IMAGE   
+#ifdef PUBLISH_DETECTION_IMAGE
+  float u,v;
+  PE_->projectPixel2PointPinHole(uav_pose_cam_.pose.position.x, uav_pose_cam_.pose.position.y, uav_pose_cam_.pose.position.z, u, v);
+  ROS_INFO("x: %.3f,y: %.3f, z: %.3f", uav_pose_cam_.pose.position.x, uav_pose_cam_.pose.position.y, uav_pose_cam_.pose.position.z);
+  ROS_INFO("u: %.3f,v: %.3f", u, v);
+  cv:circle(image, cv::Point(u,v), 10, cv::Scalar(255,0,0),cv::FILLED, cv::LINE_8);
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
@@ -318,12 +344,12 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
       cv::putText(image, ClassMap[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
     }
   }
-  
+
   for (unsigned int i=0; i < tracker_states.size(); i++) {
     for (auto & element : tracker_states[i]) {
-      cv::Rect rect(element.second[0] - element.second[5]/2, element.second[1]-element.second[4]/2, element.second[5], element.second[4]);
+      cv::Rect rect(element.second[0] - element.second[4]/2, element.second[1]-element.second[5]/2, element.second[4], element.second[5]);
       cv::rectangle(image_tracker, rect, ColorPalette[element.first % 24], 3);
-      cv::putText(image_tracker, ClassMap[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[7]/2,element.second[1]-element.second[6]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
+      cv::putText(image_tracker, ClassMap[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[4]/2,element.second[1]-element.second[5]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
     }
   }
   
@@ -336,6 +362,76 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
   tracker_pub_.publish(image_ptr_out_);
+#endif
+#ifdef PUBLISH_DETECTION_WITH_POSITION
+  depth_image_extractor::PositionBoundingBox2DArray ros_bboxes;
+  geometry_msgs::PoseArray pose_array;
+  geometry_msgs::Pose pose;
+  std::vector<geometry_msgs::Pose> poses;
+  depth_image_extractor::PositionBoundingBox2D ros_bbox;
+  std::vector<depth_image_extractor::PositionBoundingBox2D> vec_ros_bboxes;
+  for (unsigned int i=0; i<tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      ros_bbox.bbox.min_x = element.second[0] - element.second[4]/2;
+      ros_bbox.bbox.min_y = element.second[1] - element.second[5]/2;
+      ros_bbox.bbox.height = element.second[5];
+      ros_bbox.bbox.width = element.second[4];
+      ros_bbox.bbox.class_id = i;
+      ros_bbox.bbox.detection_id = element.first;
+      ros_bbox.position.x = points[i].at(element.first)[0];
+      ros_bbox.position.y = points[i].at(element.first)[1];
+      ros_bbox.position.z = points[i].at(element.first)[2];
+      pose.position.x = points[i].at(element.first)[0];
+      pose.position.y = points[i].at(element.first)[1];
+      pose.position.z = points[i].at(element.first)[2];
+      pose.orientation.w = 0;
+      vec_ros_bboxes.push_back(ros_bbox);
+      poses.push_back(pose);
+    }
+  }
+  ros_bboxes.header.stamp = cv_ptr->header.stamp;
+  ros_bboxes.header.frame_id = cv_ptr->header.frame_id;
+  ros_bboxes.bboxes = vec_ros_bboxes;
+  pose_array.header = ros_bboxes.header;
+  pose_array.poses = poses;
+  
+  positions_bboxes_pub_.publish(ros_bboxes);
+  pose_array_pub_.publish(pose_array);
+
+#else
+  unsigned int counter = 0;
+  depth_image_extractor::BoundingBoxes2D ros_bboxes;
+  depth_image_extractor::BoundingBox2D ros_bbox;
+  depth_image_extractor::PositionIDArray id_positions;
+  depth_image_extractor::PositionID id_position;
+  std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
+  std::vector<depth_image_extractor::PositionID> vec_id_positions;
+
+  for (unsigned int i=0; i<tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      ros_bbox.min_x = element.second[0] - element.second[4]/2;
+      ros_bbox.min_y = element.second[1] - element.second[5]/2;
+      ros_bbox.height = element.second[5];
+      ros_bbox.width = element.second[4];
+      ros_bbox.class_id = i;
+      ros_bbox.detection_id = element.first;
+      id_position.position.x = points[i].at(element.first)[0];
+      id_position.position.y = points[i].at(element.first)[1];
+      id_position.position.z = points[i].at(element.first)[2];
+      id_position.detection_id = element.first;
+      vec_ros_bboxes.push_back(ros_bbox);
+      vec_id_positions.push_back(id_position);
+    }
+  }
+  ros_bboxes.header.stamp = cv_ptr->header.stamp;
+  ros_bboxes.header.frame_id = cv_ptr->header.frame_id;
+  ros_bboxes.bboxes = vec_ros_bboxes;
+  id_positions.header.stamp = cv_ptr->header.stamp;
+  id_positions.header.frame_id = cv_ptr->header.frame_id;
+  id_positions.positions = vec_id_positions;
+
+  bboxes_pub_.publish(ros_bboxes);
+  positions_pub_.publish(id_positions);
 #endif
 }
 
