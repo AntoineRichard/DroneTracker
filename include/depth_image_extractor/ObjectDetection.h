@@ -1,3 +1,14 @@
+/**
+ * @file ObjectDetection.cpp
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright University of Luxembourg | SnT | SpaceR 2022--2022
+ * @brief Header of the object detection
+ * @details This file implements an object detection class using TensorRT.
+ * This class is meant to be use with the Yolo v5 from ultralytics: https://github.com/ultralytics/yolov5
+ */
 #ifndef ObjectDetection_H
 #define ObjectDetection_H
 
@@ -7,6 +18,7 @@
 #include <set>
 
 #include <opencv2/opencv.hpp>
+#include <stdio.h>
 
 // CUDA/TENSOR_RT
 #include <NvInfer.h>
@@ -25,10 +37,15 @@
   }
 
 enum ObjectClass { CLASS_DRONE = 0, NUM_CLASS = 1 };
+
 static const std::vector<std::string> ClassMap{
   std::string("Drone")
 };
 
+/**
+ * @brief An object that is used to detect objects in images.
+ * @details An object that is used to detect objects in images.
+ */
 class ObjectDetector {
   private:
     // Non Maximum Supression (NMS) parameters

@@ -1,15 +1,42 @@
+/**
+ * @file ObjectDetection.cpp
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright University of Luxembourg | SnT | SpaceR 2022--2022
+ * @brief Source code of the object detection
+ * @details This file implements an object detection class using TensorRT.
+ * This class is meant to be use with the Yolo v5 from ultralytics: https://github.com/ultralytics/yolov5
+ */
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
 // CUDA/TENSOR_RT
 #include <depth_image_extractor/ObjectDetection.h>
-#include <opencv2/opencv.hpp>
-#include <ros/ros.h>
 
+/**
+ * @brief Default constructor
+ * 
+ */
 ObjectDetector::ObjectDetector() {
 }
 
+/**
+ * @brief Prefered constructor
+ * 
+ * @param path_to_engine The absolute path to the tensorRT engine; i.e the weights of the network after conversion to tensorRT.
+ * @param nms_tresh Non Maximum Supression (NMS) threshold. 
+ * @param conf_tresh Confidence threshold. The threshold that the detector uses to keep or reject detected bounding boxes.
+ * The lower the value, the higher the chances of false positives, the higher the value, the higher the chances of false negatives.
+ * @param max_output_bbox_count The maximum amount of bounding boxes that can be detected.
+ * @param buffer_size The size of the GPU buffer, in most scenarios, this value should be set to 2. This corresponds to the number of buffers that will be used.
+ * In our case, we use two, one for the input of the network, one for its output.
+ * @param image_size The size of the image the network will process. The network processes square images (NxN), hence, only one value is required, the largest.
+ * 
+ */
 ObjectDetector::ObjectDetector(std::string path_to_engine,
                    float nms_tresh,
                    float conf_tresh,
@@ -31,6 +58,10 @@ ObjectDetector::ObjectDetector(std::string path_to_engine,
   output_data_ = std::shared_ptr<float[]>(new float[output_size_]);
 }
 
+/**
+ * @brief Makes sure the memory of the GPU is released properly.
+ * 
+ */
 ObjectDetector::~ObjectDetector(){
   // Release stream and buffers
   cudaStreamDestroy(stream_);
@@ -42,7 +73,16 @@ ObjectDetector::~ObjectDetector(){
   runtime_->destroy();
 }
 
-size_t ObjectDetector::getSizeByDim(const nvinfer1::Dims &dims) {
+/**
+ * @brief Returns the size of the buffer
+ * @details Returns the size the number of float the buffer must contains.
+ * This is used to reserve the correct amount of VRAM on the GPU.
+ *  
+ * @param dims The reference to the dimension of the buffer.
+ * @return The required number of floats to be stored on the GPU.
+ * 
+ */
+size_t ObjectDetector::getSizeByDim(const nvinfer1::Dims& dims) {
   size_t size = 1;
   for (size_t i = 0; i < dims.nbDims; ++i) {
     size *= dims.d[i];
@@ -53,15 +93,20 @@ size_t ObjectDetector::getSizeByDim(const nvinfer1::Dims &dims) {
   return size;
 }
 
+/**
+ * @brief Initializes the object detector.
+ * @details This method loads the model, allocates the memory on the GPU, and instantiate the TensorRT engine.
+ * 
+ */
 void ObjectDetector::prepareEngine() {
-  ROS_INFO("engine_path = %s", path_to_engine_.c_str());
-  std::ifstream engine_file(path_to_engine_, std::ios::binary);
+  printf("[LOG   ] ObjectDetector::%s::l%d Engine_path = %s.\n", __func__, __LINE__, path_to_engine_.c_str());
 
+  // Reads and loads the neural network
+  std::ifstream engine_file(path_to_engine_, std::ios::binary);
   if (!engine_file.good()) {
-    ROS_ERROR("no such engine file: %s", path_to_engine_.c_str());
+    printf("[ERROR ] ObjectDetector::%s::l%d No such engine file: %s.\n",__func__, __LINE__, path_to_engine_.c_str());
     return;
   }
-
   char *trt_model_stream = nullptr;
   size_t trt_stream_size = 0;
   engine_file.seekg(0, engine_file.end);
@@ -72,6 +117,7 @@ void ObjectDetector::prepareEngine() {
   engine_file.read(trt_model_stream, trt_stream_size);
   engine_file.close();
 
+  // 
   runtime_ = nvinfer1::createInferRuntime(gLogger_);
   assert(runtime_ != nullptr);
   engine_ = runtime_->deserializeCudaEngine(trt_model_stream, trt_stream_size);
@@ -79,7 +125,7 @@ void ObjectDetector::prepareEngine() {
   context_ = engine_->createExecutionContext();
   assert(context_ != nullptr);
   if (engine_->getNbBindings() != buffer_size_) {
-    ROS_ERROR("engine->getNbBindings() == %d, but should be %d",
+    printf("[ERROR ] ObjectDetector::%s::l%d engine->getNbBindings() == %d, but should be %d.\n", __func__, __LINE__,
               engine_->getNbBindings(), buffer_size_);
   }
 
@@ -91,7 +137,7 @@ void ObjectDetector::prepareEngine() {
     const size_t binding_size =
         getSizeByDim(engine_->getBindingDimensions(i)) * sizeof(float);
     if (binding_size == 0) {
-      ROS_ERROR("binding_size == 0");
+      printf("[ERROR ] ObjectDetector::%s::l%d binding_size == 0.\n",__func__,__LINE__);
 
       delete[] trt_model_stream;
       return;
@@ -100,28 +146,40 @@ void ObjectDetector::prepareEngine() {
     cudaMalloc(&buffers_[i], binding_size);
     if (engine_->bindingIsInput(i)) {
       input_dims.emplace_back(engine_->getBindingDimensions(i));
-      ROS_INFO("Input layer, size = %lu", binding_size);
+      printf("[LOG   ] ObjectDetector::%s::l%d Input layer, size = %lu.\n", __func__, __LINE__, binding_size);
       input_size_ = (int) (binding_size / 4);
-      ROS_INFO("Creating input buffer of size %d.", input_size_); 
+      printf("[LOG   ] ObjectDetector::%s::l%d Creating input buffer of size %d.\n", __func__, __LINE__, input_size_); 
     } else {
       output_dims.emplace_back(engine_->getBindingDimensions(i));
-      ROS_INFO("Output layer, size = %lu", binding_size);
+      printf("[LOG   ] ObjectDetector::%s::l%d Output layer, size = %lu.\n", __func__, __LINE__, binding_size);
       output_size_ = (int) (binding_size / 4);
-      ROS_INFO("Creating output buffer of size %d.", output_size_);
+      printf("[LOG   ] ObjectDetector::%s::l%d Creating output buffer of size %d.\n", __func__, __LINE__, output_size_);
     }
   }
 
   CUDA_CHECK(cudaStreamCreate(&stream_));
   delete[] trt_model_stream;
-  ROS_INFO("Engine preparation finished");
+  printf("[LOG   ] ObjectDetector::%s::l%d Engine preparation finished.\n", __func__, __LINE__);
 }
 
+/**
+ * @brief Runs the network
+ * @details This method applies the forward pass of the network. Before calling this method, the input buffer needs to be filled.
+ * This can be achieved by using the method called sendBufferToGPU. To collect the result, the method called getBufferFromGPU must be called.
+ * 
+ */
 void ObjectDetector::inferNetwork(){
 
   context_->enqueue(1, buffers_.data(), stream_, nullptr);
 
 }
 
+/**
+ * @brief Sends a batch to the GPU.
+ * @details Sends a batch, a set of images or a single image, to the GPU. Once this function has been called, the forward pass of the network can be applied.
+ * See infereNetwork.
+ * 
+ */
 void ObjectDetector::sendBufferToGPU(){
   CUDA_CHECK(cudaMemcpyAsync(buffers_[0], input_data_.get(),
                              input_size_ * sizeof(float), cudaMemcpyHostToDevice,
@@ -129,6 +187,11 @@ void ObjectDetector::sendBufferToGPU(){
 
 }
 
+/**
+ * @brief Fetches data from the GPU.
+ * @details Fetches the result of the network forward pass. This function should be called after infereNetwork.
+ * 
+ */
 void ObjectDetector::getBufferFromGPU(){
   CUDA_CHECK(cudaMemcpyAsync(output_data_.get(), buffers_[1],
                              output_size_ * sizeof(float),
@@ -136,6 +199,13 @@ void ObjectDetector::getBufferFromGPU(){
   cudaStreamSynchronize(stream_);
 }
 
+/**
+ * @brief Transforms the RGB image into a buffer.
+ * @details Converts the uint8 RGB image into a float32 RGB image and stores it into a buffer that can be copied onto the GPU.
+ * The copy of the buffer is done by sendBufferToGPU.
+ * 
+ * @param image The reference to the RGB image to be preprocessed.
+ */
 void ObjectDetector::preprocessImage(cv::Mat& image){
   image.convertTo(image, CV_32FC3, 1.f / 255.f);
   int i = 0;
@@ -151,6 +221,13 @@ void ObjectDetector::preprocessImage(cv::Mat& image){
   }
 }
 
+/**
+ * @brief Applies the object detector.  
+ * @details Applies the object detector on a given image and returns the bounding boxes.
+ * 
+ * @param image The image to be processed by the network.
+ * @param bboxes The reference to a vector of vectors of bounding boxes. 
+ */
 void ObjectDetector::detectObjects(cv::Mat image, std::vector<std::vector<BoundingBox>>& bboxes){
   bboxes.clear();
   preprocessImage(image);
@@ -162,21 +239,44 @@ void ObjectDetector::detectObjects(cv::Mat image, std::vector<std::vector<Boundi
   nonMaximumSuppression(bboxes);
 }
 
+/**
+ * @brief Filters the bounding boxes generated by the network.
+ * @details Applies Non Maximum Supression (NMS) to filter the bounding boxes generated by the network.
+ * First step it checks if the bounding boxes have a confidence superior to a given threshold.
+ * Second, it applies the non-maximum supression to remove deuplicate detections and other outliers.
+ * 
+ * @param bboxes The reference to a vector of vectors of bounding boxes.
+ */
 void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>> &bboxes) {
   bboxes.resize(ObjectClass::NUM_CLASS);
+  int class_id;
+  float conf; 
+
   for (int c = 0; c < ObjectClass::NUM_CLASS; ++c) {
     bboxes[c].reserve(output_size_);
   }
 
-  for (int i = 0; i < output_size_; i += 6) {
-    const float conf = output_data_.get()[i + 4];
+  // Bounding box is min_x, min_y, width, height, conf, class1, class2, ...
+  for (int i = 0; i < output_size_; i += (ObjectClass::NUM_CLASS + 5)) {
+    conf = output_data_.get()[i + 4];
     if (conf > conf_tresh_) {
       assert(conf <= 1.0f);
-      const int class_id = 0;
+      // Get all the probabilities that this objects belong to a given class
+      std::vector<float> probabilities(ObjectClass::NUM_CLASS);
+      for (unsigned int j=0; i < ObjectClass::NUM_CLASS; j++){
+        // 4 : minx, miny, width, height, conf
+        // i : number of objects
+        // j : number of classes
+        probabilities[j] = output_data_.get()[4 + i + j]; 
+      }
+      // Take the maximum
+      class_id = std::distance(probabilities.begin(), std::max_element(probabilities.begin(), probabilities.end()));
+      // Save to bounding box
       bboxes[class_id].push_back(BoundingBox(output_data_.get() + i));
     }
   }
 
+  // Non-maximum supression
   for (int c = 0; c < ObjectClass::NUM_CLASS; ++c) {
     std::sort(bboxes[c].begin(), bboxes[c].end(),
               BoundingBox::sortComparisonFunction);
