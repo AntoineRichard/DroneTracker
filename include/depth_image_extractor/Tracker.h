@@ -77,7 +77,7 @@ class BaseTracker {
     BaseTracker();
     BaseTracker(const int&, const float&, const float&, const float&, const float&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
     void update(const float&, const std::vector<std::vector<float>>&);
-    void getStates(std::map<int, std::vector<float>>&);
+    void getStates(std::map<unsigned int, std::vector<float>>&);
 };
 
 class Tracker2D : public BaseTracker {

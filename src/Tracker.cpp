@@ -115,7 +115,7 @@ Tracker3D::Tracker3D(const int& max_frames_to_skip, const float& dist_treshold,
                      dt, use_dim, use_vel, Q, R) {}
 
 
-void BaseTracker::getStates(std::map<int, std::vector<float>>& tracks){
+void BaseTracker::getStates(std::map<unsigned int, std::vector<float>>& tracks){
   std::vector<float> state; 
   for (auto & element : Objects_) {
     element.second->getState(state);
@@ -133,11 +133,11 @@ void BaseTracker::incrementFrame(){
 
 bool BaseTracker::isMatch(const std::vector<float>& s1, const std::vector<float>& s2) const {
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d centroidError: %.3f, %.3f\n",__func__,__LINE__,centroidsError(s1,s2), center_threshold_);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d centroidError: %.3f, %.3f\n",__func__,__LINE__,centroidsError(s1,s2), center_threshold_);
 #endif
   if (centroidsError(s1,s2) < center_threshold_) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d areaRatio: %.3f, %.3f\n",__func__,__LINE__,areaRatio(s1,s2), area_threshold_);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d areaRatio: %.3f, %.3f\n",__func__,__LINE__,areaRatio(s1,s2), area_threshold_);
 #endif
     if ((1/area_threshold_ < areaRatio(s1,s2)) && (areaRatio(s1,s2) < area_threshold_)) {
       return true;
@@ -170,6 +170,18 @@ void BaseTracker::hungarianMatching(std::vector<std::vector<double>>& cost, std:
 }
 
 void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>& states){
+
+  // Update the Kalman filters
+#ifdef DEBUG_TRACKER
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Updating Kalman filters.\n", __func__, __LINE__);
+#endif
+  for (auto & element : Objects_) {
+    element.second->predict(dt);
+  }
+  
+  // Increment the number of frames.
+  incrementFrame();
+  
   if (states.empty()) {
     return;
   }
@@ -180,21 +192,10 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
   std::vector<int> unassigned_tracks;
   std::vector<int> unassigned_detections;
 
-  // Update the Kalman filters
-#ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Updating Kalman filters.\n", __func__, __LINE__);
-#endif
-  for (auto & element : Objects_) {
-    element.second->predict(dt);
-  }
-
-  // Increment the number of frames.
-  incrementFrame();
-
   // If tracks are empty, then create some new tracks.
   if (Objects_.empty()) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d Creating new tracks.\n", __func__, __LINE__);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Creating new tracks.\n", __func__, __LINE__);
 #endif
     for (unsigned int i=0; i < states.size(); i++) {
       addNewObject();
@@ -205,62 +206,62 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
 
   // Match the new detections with the current tracks.
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Computing cost\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Computing cost\n", __func__, __LINE__);
 #endif
   for (unsigned int i=0; i < states.size(); i++) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d state %d:\n", __func__, __LINE__, i);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d state %d:\n", __func__, __LINE__, i);
 #endif
     for (unsigned int j=0; j < states[i].size(); j++) {
 #ifdef DEBUG_TRACKER
-      printf("[DEBUG] Tracker::%s::l%d  + state %d-%d: %.3f\n", __func__, __LINE__,i,j,states[i][j]);
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d  + state %d-%d: %.3f\n", __func__, __LINE__,i,j,states[i][j]);
 #endif
     }
   }
   unsigned int i = 0;
   for (auto & element : Objects_) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d kalman states %d:\n", __func__, __LINE__, element.first);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d kalman states %d:\n", __func__, __LINE__, element.first);
 #endif
     element.second->getState(state);
     for (unsigned int j=0; j < state.size(); j++) {
 #ifdef DEBUG_TRACKER
-      printf("[DEBUG] Tracker::%s::l%d  + kalman state %d-%d: %.3f\n", __func__, __LINE__,i,j,state[j]);
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d  + kalman state %d-%d: %.3f\n", __func__, __LINE__,i,j,state[j]);
 #endif
     } 
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d kalman states %d:\n", __func__, __LINE__, element.first);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d kalman states %d:\n", __func__, __LINE__, element.first);
 #endif
     i ++;
   }
   computeCost(cost, states, tracks_mapping); 
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Performing matching\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Performing matching\n", __func__, __LINE__);
 #endif
   for (unsigned int i=0; i < cost.size(); i++) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d cost %d:\n", __func__, __LINE__, i);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d cost %d:\n", __func__, __LINE__, i);
 #endif
     for (unsigned int j=0; j < cost[i].size(); j++) {
 #ifdef DEBUG_TRACKER
-      printf("[DEBUG] Tracker::%s::l%d  + cost %d-%d: %.3f\n", __func__, __LINE__,i,j,cost[i][j]);
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d  + cost %d-%d: %.3f\n", __func__, __LINE__,i,j,cost[i][j]);
 #endif
     }
   }
   hungarianMatching(cost, assignments);
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d assignments are:\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d assignments are:\n", __func__, __LINE__);
 #endif
   for (unsigned int i=0; i<assignments.size();i++) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d  + matching track raw %d with detection %d.\n", __func__, __LINE__,i,assignments[i]);
-    printf("[DEBUG] Tracker::%s::l%d  + matching track %d with detection %d.\n", __func__, __LINE__,tracks_mapping[i],assignments[i]);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d  + matching track raw %d with detection %d.\n", __func__, __LINE__,i,assignments[i]);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d  + matching track %d with detection %d.\n", __func__, __LINE__,tracks_mapping[i],assignments[i]);
 #endif
   }
 
   // Check for unassigned tracks
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Cheking for unassigned tracks.\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Cheking for unassigned tracks.\n", __func__, __LINE__);
 #endif
   for (unsigned int i=0; i < assignments.size(); i++) {
     if (assignments[i] == -1) {
@@ -277,7 +278,7 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
 
   // Check for unassigned detections
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Cheking for unassigned detections.\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Cheking for unassigned detections.\n", __func__, __LINE__);
 #endif
   bool assigned;
   for (unsigned int i=0; i < states.size(); i++) {
@@ -295,7 +296,7 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
 
   // Start new tracks
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Starting new tracks.\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Starting new tracks.\n", __func__, __LINE__);
 #endif
   for (unsigned int i=0; i < unassigned_detections.size(); i++) {
     addNewObject();
@@ -305,19 +306,19 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
 
   // Correct the Kalman filters
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Correcting filters.\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Correcting filters.\n", __func__, __LINE__);
 #endif
   for (unsigned int i=0; i < assignments.size(); i++) {
 #ifdef DEBUG_TRACKER
-    printf("[DEBUG] Tracker::%s::l%d running for 1\n", __func__, __LINE__);
+    printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d running for 1\n", __func__, __LINE__);
 #endif
     if (assignments[i] != -1) {
 #ifdef DEBUG_TRACKER
-      printf("[DEBUG] Tracker::%s::l%d assignment is ok\n", __func__, __LINE__);
-      printf("[DEBUG] Tracker::%s::l%d %d\n", __func__, __LINE__, assignments[i]);
-      printf("[DEBUG] Tracker::%s::l%d %d\n", __func__, __LINE__, tracks_mapping[i]);
-      printf("[DEBUG] Tracker::%s::l%d %d\n", __func__, __LINE__, Objects_[tracks_mapping[i]]->getSkippedFrames());
-      printf("[DEBUG] Tracker::%s::l%d %ld\n", __func__, __LINE__, Objects_.size());
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d assignment is ok\n", __func__, __LINE__);
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d %d\n", __func__, __LINE__, assignments[i]);
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d %d\n", __func__, __LINE__, tracks_mapping[i]);
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d %d\n", __func__, __LINE__, Objects_[tracks_mapping[i]]->getSkippedFrames());
+      printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d %ld\n", __func__, __LINE__, Objects_.size());
 #endif
       Objects_[tracks_mapping[i]]->correct(states[assignments[i]]);
     }
@@ -325,7 +326,7 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
 
   // Remove old tracks
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Removing old tracks.\n", __func__, __LINE__);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Removing old tracks.\n", __func__, __LINE__);
 #endif
   for (auto it = Objects_.cbegin(); it != Objects_.cend();)
   {
@@ -340,7 +341,7 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
   }
 
 #ifdef DEBUG_TRACKER
-  printf("[DEBUG] Tracker::%s::l%d Num tracks %d\n", __func__, __LINE__, track_id_count_);
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Num tracks %d\n", __func__, __LINE__, track_id_count_);
 #endif
 }
 
