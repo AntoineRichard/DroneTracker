@@ -5,7 +5,7 @@
 #include <execution>
 #include <opencv2/opencv.hpp>
 #include <depth_image_extractor/utils.h>
-
+#include <stdio.h>
 
 
 class PoseEstimator {
@@ -29,11 +29,14 @@ class PoseEstimator {
     PoseEstimator();
     PoseEstimator(float, float, float, float, int, int);
     std::vector<std::vector<float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
+    std::vector<std::map<unsigned int, float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>&);
     std::vector<std::vector<std::vector<float>>> estimatePosition(const std::vector<std::vector<float>>& , const std::vector<std::vector<BoundingBox>>&);
+    std::vector<std::map<unsigned int, std::vector<float>>> estimatePosition(const std::vector<std::map<unsigned int, float>>& , const std::vector<std::map<unsigned int, std::vector<float>>>&);
     void deprojectPixel2PointBrownConrady(const float&, const std::vector<float>&, std::vector<float>&);
     void deprojectPixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
     void distancePixel2PointBrownConrady(const float&, const std::vector<float>&, std::vector<float>&);
     void distancePixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
+    void projectPixel2PointPinHole(const float&, const float&, const float&, float&, float&);
     void updateCameraParameters(float, float, float, float, std::vector<double>);
 };
 

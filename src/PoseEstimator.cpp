@@ -1,5 +1,4 @@
 #include <depth_image_extractor/PoseEstimator.h>
-#include <ros/ros.h>
 
 PoseEstimator::PoseEstimator() {
 }
@@ -56,6 +55,11 @@ void PoseEstimator::deprojectPixel2PointPinHole(const float& depth, const std::v
   point[2] = depth;
 }
 
+void PoseEstimator::projectPixel2PointPinHole(const float& x, const float& y, const float& z, float& u, float& v){
+  u = (x/z)*fx_ + cx_ ;
+  v = (y/z)*fy_ + cy_;
+}
+
 void PoseEstimator::distancePixel2PointPinHole(const float& depth, const std::vector<float>& pixel, std::vector<float>& point){
   float x = (pixel[0] - cx_) / fx_;
   float y = (pixel[1] - cy_) / fy_;
@@ -96,7 +100,6 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
   int rows, cols;
 
 #ifdef PROFILE
-  ROS_INFO("Timing distance measurements:");
   std::chrono::time_point<std::chrono::system_clock> start_distance;
   std::chrono::time_point<std::chrono::system_clock> end_distance;
   std::chrono::time_point<std::chrono::system_clock> start_measure;
@@ -128,19 +131,20 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
         distance_vector.push_back(-1);
 #ifdef PROFILE
         end_distance = std::chrono::system_clock::now();
-        ROS_INFO(" - Obj %d distance done in %ld us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+        printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance done in %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
 #endif
         continue;
       }
 #ifdef PROFILE
       start_measure = std::chrono::system_clock::now();
 #endif
-      rows = bboxes[i][j].y_max_ - bboxes[i][j].y_min_;
-      cols = bboxes[i][j].x_max_ - bboxes[i][j].x_min_;
+      rows = bboxes[i][j].h_;//y_max_ - bboxes[i][j].y_min_;
+      cols = bboxes[i][j].w_;//x_max_ - bboxes[i][j].x_min_;
       distances.clear();
-      //distances.resize(rows*cols, 0);
-      for (unsigned int row = bboxes[0][i].y_min_; row<bboxes[0][i].y_max_; row++) {
-        for (unsigned int col = bboxes[0][i].x_min_; col<bboxes[0][i].x_max_; col++) {
+      distances.resize(rows*cols, 0);
+      unsigned int c = 0;
+      for (int row = (int) bboxes[0][i].y_min_; row < (int) bboxes[0][i].y_max_; row++) {
+        for (int col = (int) bboxes[0][i].x_min_; col < (int) bboxes[0][i].x_max_; col++) {
           z = depth_image.at<float>(row, col);
           if (z != 0) {
             pixel[0] = row;
@@ -151,8 +155,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
             deprojectPixel2PointPinHole(z, pixel, point);
 #endif
             d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
-            //distances[(row - bboxes[0][i].y_min_)*cols + (col - bboxes[0][i].x_min_)] = d;
-            distances.push_back(d);
+            distances[c] = d;
+            //distances.push_back(d);
+            c++;
           }
         }
       }
@@ -165,14 +170,90 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
       distance_vector.push_back(std::accumulate(distances.begin() + reject, distances.begin() + reject+keep,0.0) / keep);
 #ifdef PROFILE
       end_distance = std::chrono::system_clock::now();
-      ROS_INFO(" - Obj %d distance time %ld us", i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
-      ROS_INFO("   + measure time %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
-      ROS_INFO("   + sort time %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
+      printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance time %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+      printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d   + measure time %ld us\n", __func__, __LINE__,  std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
+      printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d   + sort time %ld us\n", __func__, __LINE__,  std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
 #endif
     }
     distance_vectors.push_back(distance_vector);
   }
   return distance_vectors;
+}
+
+std::vector<std::map<unsigned int, float>> PoseEstimator::extractDistanceFromDepth(const cv::Mat& depth_image, const std::vector<std::map<unsigned int, std::vector<float>>>& tracked_states){
+  std::vector<std::map<unsigned int, float>> distance_maps;
+  distance_maps.resize(tracked_states.size());
+  std::vector<float> distances;
+  std::vector<float> point(3,0);
+  std::vector<float> pixel(2,0);
+  float z, d;
+  int rows, cols;
+
+#ifdef PROFILE
+  std::chrono::time_point<std::chrono::system_clock> start_distance;
+  std::chrono::time_point<std::chrono::system_clock> end_distance;
+  std::chrono::time_point<std::chrono::system_clock> start_measure;
+  std::chrono::time_point<std::chrono::system_clock> end_measure;
+#endif
+
+  if (depth_image.empty()) {
+    for (unsigned int i=0; i < tracked_states.size(); i++) {
+      for (auto & element : tracked_states[i]) {
+        distance_maps[i].insert(std::pair(element.first, -1));
+      }
+    }
+    return distance_maps; 
+  }
+
+  size_t reject, keep;
+  for (unsigned int i=0; i < tracked_states.size(); i++) {
+    for (auto & element : tracked_states[i]) {
+#ifdef PROFILE
+      start_distance = std::chrono::system_clock::now();
+      start_measure = std::chrono::system_clock::now();
+#endif
+      distances.clear();
+      cols = element.second[4];
+      rows = element.second[5];
+      unsigned int c = 0;
+      //distances.resize(rows*cols, 0);
+      for (int row = (int) element.second[1] - rows/2; row < (int) element.second[1] + rows/2; row++) {
+        for (int col = (int) element.second[0] - cols/2; col < (int) element.second[0] + cols/2; col++) {
+          z = depth_image.at<float>(row, col);
+          if (z != 0) {
+            pixel[0] = row;
+            pixel[1] = col;
+#ifdef BROWNCONRADY
+            deprojectPixel2PointBrownConrady(z, pixel, point);
+#else
+            deprojectPixel2PointPinHole(z, pixel, point);
+#endif
+            d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
+            if (std::isnan(d)) {
+              continue;
+            }
+            distances.push_back(d);
+            //distances[c] = d;
+            //c++;
+          }
+        }
+      }
+#ifdef PROFILE
+      end_measure = std::chrono::system_clock::now();
+#endif
+      reject = distances.size() * rejection_threshold_;
+      keep = distances.size() * keep_threshold_;
+      std::sort(distances.begin(), distances.end(), std::less<float>()); 
+      distance_maps[i].insert(std::pair(element.first, std::accumulate(distances.begin() + reject, distances.begin() + reject+keep,0.0) / keep));
+#ifdef PROFILE
+      end_distance = std::chrono::system_clock::now();
+      printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance time %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+      printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d   + measure time %ld us\n", __func__, __LINE__,  std::chrono::duration_cast<std::chrono::microseconds>(end_measure - start_measure).count());
+      printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d   + sort time %ld us\n", __func__, __LINE__,  std::chrono::duration_cast<std::chrono::microseconds>(end_distance - end_measure).count());
+#endif
+    }
+  }
+  return distance_maps;
 }
 
 
@@ -204,4 +285,25 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
     point_vectors.push_back(point_vector);
   }
   return point_vectors;
+}
+
+std::vector<std::map<unsigned int, std::vector<float>>> PoseEstimator::estimatePosition(const std::vector<std::map<unsigned int, float>>& distances, const std::vector<std::map<unsigned int, std::vector<float>>>& tracked_states) {
+  std::vector<std::map<unsigned int, std::vector<float>>> point_maps;
+  std::vector<float> point(3,0);
+  std::vector<float> pixel(2,0);
+  point_maps.resize(tracked_states.size());
+  for (unsigned int i=0; i < tracked_states.size(); i++) {
+    for (auto & element : tracked_states[i]) {
+      float theta, phi;
+      pixel[0] = element.second[0];
+      pixel[1] = element.second[1];
+#ifdef BROWNCONRADY
+      distancePixel2PointBrownConrady(distances[i].at(element.first), pixel, point);
+#else
+      distancePixel2PointPinHole(distances[i].at(element.first), pixel, point);
+#endif
+      point_maps[i].insert(std::pair(element.first, point));
+    }
+  }
+  return point_maps;
 }
