@@ -1,3 +1,14 @@
+/**
+ * @file KalmanFilter.h
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright University of Luxembourg | SnT | SpaceR 2022--2022
+ * @brief Header of the Kalman filter classes.
+ * @details This file implements a set of kalman filter for object tracking.
+ */
+
 #ifndef KalmanFilter_H
 #define KalmanFilter_H
 
@@ -8,17 +19,11 @@
 #include <eigen3/Eigen/Dense>
 #include <math.h>
 
-#define I_PX 0
-#define I_PY 1
-#define I_PZ 2
-#define I_VX 3
-#define I_VY 4
-#define I_VZ 5
-#define I_H  6
-#define I_W  7
-#define I_CX 8
-#define I_CY 9
-
+/**
+ * @brief A basic Kalman filter object
+ * @details This object implements the default prediction and correction function of a linear Kalman filter.
+ * It also provides a set of helper function to debug or access its variables.
+ */
 class BaseKalmanFilter {
   protected:
     float dt_;
@@ -55,6 +60,14 @@ class BaseKalmanFilter {
     void getUncertainty(std::vector<float>&);
 };
 
+/**
+ * @brief A 2D (x,y) linear Kalman filter.
+ * @details This class implements a filter to estimate the motion of objects in two dimensions.
+ * The state is composed of 6 variables: x, y, vx, vy, w, h.
+ * x is the position on the x axis, y is the position on the y axis, vx and vy, are the velocities on the x and y axis respectively, w is the object width, and h is the object height.
+ * The measurement of this filter can be adjusted by the user. The position is always observed, but the velocity and the width/height can, or not, be observed.
+ * By default we recommend observing the width/height, and not the velocity. The filter will derive the velocity on its own after its first correction.
+ */
 class KalmanFilter2D : public BaseKalmanFilter {
   protected:
     void initialize(const std::vector<float>&, const std::vector<float>&);
@@ -72,6 +85,14 @@ class KalmanFilter2D : public BaseKalmanFilter {
     void buildH() override;
 };
 
+/**
+ * @brief a 3D (x,y,z) linear Kalman filter.
+ * @details This class implements a filter to estimate the motion of objects in three dimensions.
+ * The state is composed of 8 variables: x, y, z, vx, vy, vz, w, h.
+ * x, y, and z are the position on the x, y, and z axis respectively, vx, vy and vz are the velocities on the x, y and z axis respectively, w is the object width, and h is the object height.
+ * The measurement of this filter can be adjusted by the user. The position is always observed, but the velocity and the width/height can, or not, be observed.
+ * By default we recommend observing the width/height, and not the velocity. The filter will derive the velocity on its own after its first correction.
+ */
 class KalmanFilter3D : public BaseKalmanFilter {
   protected:
     void initialize(const std::vector<float>&, const std::vector<float>&);

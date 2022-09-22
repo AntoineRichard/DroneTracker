@@ -1,20 +1,49 @@
+/**
+ * @file KalmanFilter.cpp
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright University of Luxembourg | SnT | SpaceR 2022--2022
+ * @brief The source code of the Kalman filter classes.
+ * @details This file implements a set of kalman filter for object tracking.
+ */
+
 #include <depth_image_extractor/KalmanFilter.h>
 
-BaseKalmanFilter::BaseKalmanFilter() {
-  // State is [x, y, z, vx, vy, vz, h, w]
-}
+/**
+ * @brief Default constructor.
+ * @details Default constructor.
+ * 
+ */
+BaseKalmanFilter::BaseKalmanFilter() {}
 
+/**
+ * @brief Prefered constructor.
+ * @details Prefered constructor.
+ * 
+ * @param dt The default time-delta in between two updates.
+ * @param use_dim A flag to indicate if the filter should observe the height and width of the tracked object.
+ * @param use_vel A flag to indicate if the filter should observe the velocity of the tracked object.
+ * @param Q A reference to a vector of floats containing the process noise for each variable.
+ * @param R A reference to a vector of floats containing the observation noise for each measurement.
+ */
 BaseKalmanFilter::BaseKalmanFilter(const float& dt, const bool& use_dim, const bool& use_vel,
                                    const std::vector<float>& Q, const std::vector<float>& R) {}
 
-BaseKalmanFilter::~BaseKalmanFilter() {
-  printf("Base Kalman Filter Descructor");
-}
+/**
+ * @brief Default destructor.
+ * @details Default destructor.
+ * 
+ */
+BaseKalmanFilter::~BaseKalmanFilter() {}
 
-KalmanFilter2D::~KalmanFilter2D() {
-  printf("2D Kalman Filter Descructor");
-}
-
+/**
+ * @brief Accessor function to get the current state.
+ * @details Accessor function to get the current state.
+ * 
+ * @param state A reference to the vector containing the state.
+ */
 void BaseKalmanFilter::getState(std::vector<float>& state) {
   state.resize(X_.size());
   for (unsigned int i=0; i < state.size(); i++){
@@ -22,6 +51,12 @@ void BaseKalmanFilter::getState(std::vector<float>& state) {
   }
 }
 
+/**
+ * @brief Accessor function to get the current uncertainty on the state.
+ * @details Accessor function to get the current uncertainty on the state.
+ * 
+ * @param uncertainty A reference to the vector containing the uncertainty.
+ */
 void BaseKalmanFilter::getUncertainty(std::vector<float>& uncertainty) {
   uncertainty.resize(X_.size());
   for (unsigned int i=0; i < uncertainty.size(); i++){
@@ -29,6 +64,16 @@ void BaseKalmanFilter::getUncertainty(std::vector<float>& uncertainty) {
   }
 }
 
+/**
+ * @brief The prediction function of the linear Kalman filter.
+ * @details This function implements the prediction step of a Kalman Filter.
+ * First F is updated, as well as the state X using the following formula:
+ * X = F*X, where F is the dynamics of the system expressed as a Matrix.
+ * Then P, the uncertainty on the state is updated:
+ * P = F*P*F^T + Q, where Q is the process noise.
+ * 
+ * @param dt The time delta in second in between two updates.
+ */
 void BaseKalmanFilter::predict(const float& dt) {
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Updating.\n", __func__, __LINE__); 
@@ -48,11 +93,45 @@ void BaseKalmanFilter::predict(const float& dt) {
   P_ = F_ * P_ * F_.transpose() + Q_;
 }
 
+/**
+ * @brief The prediction function of the linear Kalman filter.
+ * @details This function implements the prediction step of a Kalman filter.
+ * First the state X is updated using the following formula:
+ * X = F*X, where F is the dynamics of the system expressed as a Matrix.
+ * Then P, the uncertainty on the state, is updated:
+ * P = F*P*F^T + Q, where Q is the process noise.
+ * 
+ */
 void BaseKalmanFilter::predict() {
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d F matrix:\n", __func__, __LINE__);
+  printF();
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d X (state) before update:\n", __func__, __LINE__);
+  printX();
+#endif
   X_  = F_ * X_;
+# ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d X (state) after update:\n", __func__, __LINE__);
+  printX();
+#endif
   P_ = F_ * P_ * F_.transpose() + Q_;
 }
 
+/**
+ * @brief The correction function of the linear Kalman filter.
+ * @details This function implements the correction step of a Kalman filter.
+ * First, the measurment Z is acquired, and the innovation Y is computed using the following formula:
+ * Y = Z - H*X, where H is the 
+ * Then, X is corrected using the new measurement:
+ * S = R + H*P*H^T, where R is the noise on the measurment
+ * K = P*H*S^-1
+ * X = X + K*Y
+ * Finally the uncertainty on the state is adjusted:
+ * IKH = I - K*H
+ * P = IKH*P*IKH^T + K*R*K^T
+ * 
+ * @param Z The reference to the measurement vector.
+ */
 void BaseKalmanFilter::correct(const std::vector<float>& Z){
   Eigen::MatrixXf Y, S, K, I_KH;
 #ifdef DEBUG_KALMAN
@@ -95,19 +174,91 @@ void BaseKalmanFilter::correct(const std::vector<float>& Z){
 #endif
 }
 
+/**
+ * @brief Instantiates all the variables in the filter. 
+ * @details This function instantiates the following variables:
+ * X the state, P the covariance, Q the process noise, R the observation noise, F the dynamics,
+ * H the observation matrix, and I an identity matrix.
+ * To be implemented in child classes.
+ * 
+ * @param Q The reference to the process noise vector.
+ * @param R The reference to the measurement noise vector.
+ */
 void BaseKalmanFilter::initialize(const std::vector<float>& Q, const std::vector<float>& R) {}
+
+/**
+ * @brief Instantiates the observation matrix H. 
+ * @details The function builds the observatiin matrix H.
+ * To be implemented in child classes.
+
+ * @param R The reference to the vector containing the noise of the measurement.
+ */
 void BaseKalmanFilter::buildH(){}
+
+/**
+ * @brief Instantiates the measurement noise R. 
+ * @details The function builds the measurement noise matrix R.
+ * To be implemented in child classes.
+
+ * @param R The reference to the vector containing the noise of the measurement.
+ */
 void BaseKalmanFilter::buildR(const std::vector<float>& R){}
+
+/**
+ * @brief Resets the state and covariance.
+ * @details This function resets the state and covariance of the filter.
+ * The state is initialiazed to the value given by the user, the covariance is set to Q*Q.
+ * 
+ * @param initial_state The refence to the vector containing the value of the state should be reseted to.
+ */
 void BaseKalmanFilter::resetFilter(const std::vector<float>& initial_state) {}
+
+/**
+ * @brief Updates the dynamics based on dt.
+ * @details Updates the dt value in the dynamics such that the propagation of the velocity is correct.
+ * To be implemented in child classes.
+ * 
+ * @param dt 
+ */
 void BaseKalmanFilter::updateF(const float& dt) {}
+
 void BaseKalmanFilter::getMeasurement(const std::vector<float>& measurement) {}
+
+/**
+ * @brief Helper function to display the matrix F.
+ * @details Helper function to display the matrix F.
+ * To be implemented in child classes.
+ * 
+ */
 void BaseKalmanFilter::printF() {}
+
+/**
+ * @brief Helper function to display the state X.
+ * @details Helper function to display the state X.
+ * To be implemented in child classes.
+ * 
+ */
 void BaseKalmanFilter::printX() {}
 
+/**
+ * @brief Default constructor.
+ * @details Default constructor.
+ * 
+ */
 KalmanFilter2D::KalmanFilter2D() {
   // State is [u, v, vu, vv, h, w]
 }
 
+/**
+ * @brief Prefered constructor.
+ * @details Prefered constructor.
+ * 
+ * @param dt The default time-delta in between two updates.
+ * @param use_dim A flag to indicate if the filter should observe the height and width of the tracked object.
+ * @param use_vel A flag to indicate if the filter should observe the velocity of the tracked object.
+ * @param Q A reference to a vector of floats containing the process noise for each variable (R6).
+ * @param R A reference to a vector of floats containing the observation noise for each measurement (R6).
+ */
 KalmanFilter2D::KalmanFilter2D(const float& dt, const bool& use_dim, const bool& use_vel, const std::vector<float>& Q, const std::vector<float>& R) {
   // State is [u, v, vu, vv, h, w]
   dt_ = dt;
@@ -116,6 +267,18 @@ KalmanFilter2D::KalmanFilter2D(const float& dt, const bool& use_dim, const bool&
   initialize(Q,R);
 }
 
+/**
+ * @brief Default destructor.
+ * @details Default destructor.
+ * 
+ */
+KalmanFilter2D::~KalmanFilter2D() {}
+
+/**
+ * @brief Helper function to display the matrix F.
+ * @details Helper function to display the matrix F.
+ * 
+ */
 void KalmanFilter2D::printF() {
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(0,0), F_(0,1), F_(0,2), F_(0,3), F_(0,4), F_(0,5));
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(1,0), F_(1,1), F_(1,2), F_(1,3), F_(1,4), F_(1,5));
@@ -125,10 +288,31 @@ void KalmanFilter2D::printF() {
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(5,0), F_(5,1), F_(5,2), F_(5,3), F_(5,4), F_(5,5));
 }
 
+/**
+ * @brief Helper function to display the state X.
+ * @details Helper function to display the state X.
+ * 
+ */
 void KalmanFilter2D::printX() {
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, X_(0), X_(1), X_(2), X_(3), X_(4), X_(5));
 }
 
+/**
+ * @brief Instantiates all the variables in the filter. 
+ * @details This function instantiates the following variables:
+ * X the state (R6), P the covariance (R6x6), Q the process noise (R6x6), R the observation noise (R?x?), F the dynamics (R6x6),
+ * H the observation matrix (R?x6), and I an identity matrix (R6x6).
+ * F, the dynamics is computed using the following equations:
+ * x_t+1 = x_t + vx_t * dt
+ * y_t+1 = y_t + vy_t * dt
+ * vx_t+1 = vx_t
+ * vy_t+1 = vy_t
+ * h_t+1 = h_t
+ * w_t+1 = w_t
+ * 
+ * @param Q The reference to the process noise vector (R6).
+ * @param R The reference to the measurement noise vector (R6).
+ */
 void KalmanFilter2D::initialize(const std::vector<float>& Q, const std::vector<float>& R) {
   // State is [u, v, vu ,vv, h, w]
 #ifdef DEBUG_KALMAN
@@ -138,13 +322,13 @@ void KalmanFilter2D::initialize(const std::vector<float>& Q, const std::vector<f
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting state to 0.\n", __func__, __LINE__); 
 #endif
-  X_ << 0, 0, 0, 0, 0, 0;
+  X_ << 0, 0, 0, 0, 0, 0; // state is initialized a 0
 
   // Process noise
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting Q.\n", __func__, __LINE__); 
 #endif
-  Q_ = Eigen::MatrixXf::Zero(6,6);
+  Q_ = Eigen::MatrixXf::Zero(6,6);  
   Q_(0,0) = Q[0];
   Q_(1,1) = Q[1];
   Q_(2,2) = Q[2];
@@ -164,7 +348,7 @@ void KalmanFilter2D::initialize(const std::vector<float>& Q, const std::vector<f
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting P.\n", __func__, __LINE__); 
 #endif
   P_ = Eigen::MatrixXf::Zero(6,6);
-  P_ = Q_*Q_;
+  P_ = Q_*Q_; // P is initialialized at Q*Q
 
   // Helper matrices
 #ifdef DEBUG_KALMAN
@@ -176,13 +360,20 @@ void KalmanFilter2D::initialize(const std::vector<float>& Q, const std::vector<f
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting R.\n", __func__, __LINE__); 
 #endif
-  buildR(R);
+  buildR(R); // R is modular and depends on user choices. (use_dim, use_vel)
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting H.\n", __func__, __LINE__); 
 #endif
-  buildH();
+  buildH(); // H is modular and depends on user choices. (use_dim, use_vel)
 }
 
+/**
+ * @brief Instantiates the Observation matrix H.
+ * @details This function builds the observation matrix H based on the selected parameters.
+ * If the user selected use_vel, then the velocities will be observed and hence included in the observation matrix.
+ * If the user selected use_dim, then the height and width will be observed and hence included in the observation matrix.
+ * 
+ */
 void KalmanFilter2D::buildH(){
   int h_size = 2;
   if (use_vel_) {
@@ -222,6 +413,15 @@ void KalmanFilter2D::buildH(){
   }
 }
 
+/**
+ * @brief Instantiates the measurement noise R. 
+ * @details The function builds the measurement noise matrix R.
+ * The size of this matrix changes based on the selected parameters parameters.
+ * If the user selected use_vel, then the noise on the observed velocities will be added to the matrix.
+ * If the user selected use_dim, then the noise on the observed height and width will be added to the matrix.
+ * 
+ * @param R The reference to the vector containing the noise of the measurement (R6).
+ */
 void KalmanFilter2D::buildR(const std::vector<float>& R){
   int r_size = 2;
   if (use_vel_) {
@@ -252,6 +452,13 @@ void KalmanFilter2D::buildR(const std::vector<float>& R){
   }
 }
 
+/**
+ * @brief Resets the state and covariance.
+ * @details This function resets the state and covariance of the filter.
+ * The state is initialiazed to the value given by the user, the covariance is set to Q*Q.
+ * 
+ * @param initial_state The refence to the vector containing the value of the state should be reseted to (R6).
+ */
 void KalmanFilter2D::resetFilter(const std::vector<float>& initial_state) {
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Reinitializing state and covariance.\n", __func__, __LINE__); 
@@ -270,6 +477,14 @@ void KalmanFilter2D::resetFilter(const std::vector<float>& initial_state) {
   P_ = Q_*Q_;
 }
 
+/**
+ * @brief Converts the std::vector to a eigen::MatrixXf. 
+ * @details Converts the measurement (std::vector<float>) into a eigen::MatrixXf.
+ * It also ensures that the correct quantities are being observed.
+ * The user must give a vector of full size even if the values are not observed (use 0s instead).
+ * 
+ * @param measurement The reference to the measurement vector (R6).
+ */
 void KalmanFilter2D::getMeasurement(const std::vector<float>& measurement) {
   // State is [u, v, vu, vv, h, w]
   Z_(0) = measurement[0];
@@ -292,16 +507,36 @@ void KalmanFilter2D::getMeasurement(const std::vector<float>& measurement) {
   }
 }
 
+/**
+ * @brief Updates the dynamics based on dt.
+ * @details Updates the dt value in the dynamics such that the propagation of the velocity is correct.
+ * We recall that x_t+1 = x_t + vx_t * dt, x_t being the position at time t, and vx_t being the velocity at time t.
+ * 
+ * @param dt 
+ */
 void KalmanFilter2D::updateF(const float& dt) {
   F_(0,2) = dt;
   F_(1,3) = dt;
 }
 
 
-KalmanFilter3D::KalmanFilter3D() {
-  // State is [x, y, z, vx, vy, vz, h, w]
-}
+/**
+ * @brief Default constructor.
+ * @details Default constructor.
+ * 
+ */
+KalmanFilter3D::KalmanFilter3D() {}
 
+/**
+ * @brief Prefered constructor.
+ * @details Prefered constructor.
+ * 
+ * @param dt The default time-delta in between two updates.
+ * @param use_dim A flag to indicate if the filter should observe the height and width of the tracked object.
+ * @param use_vel A flag to indicate if the filter should observe the velocity of the tracked object.
+ * @param Q A reference to a vector of floats containing the process noise for each variable (R8).
+ * @param R A reference to a vector of floats containing the observation noise for each measurement (R8).
+ */
 KalmanFilter3D::KalmanFilter3D(const float& dt, const bool& use_dim, const bool& use_vel, const std::vector<float>& Q, const std::vector<float>& R) {
   // State is [x, y, z, vx, vy, vz, h, w]
   dt_ = dt;
@@ -310,6 +545,18 @@ KalmanFilter3D::KalmanFilter3D(const float& dt, const bool& use_dim, const bool&
   initialize(Q,R);
 }
 
+/**
+ * @brief Default destructor.
+ * @details Default destructor.
+ * 
+ */
+KalmanFilter3D::~KalmanFilter3D() {}
+
+/**
+ * @brief Helper function to display the matrix F.
+ * @details Helper function to display the matrix F.
+ * 
+ */
 void KalmanFilter3D::printF() {
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(0,0), F_(0,1), F_(0,2), F_(0,3), F_(0,4), F_(0,5), F_(0,6), F_(0,7));
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(1,0), F_(1,1), F_(1,2), F_(1,3), F_(1,4), F_(1,5), F_(1,6), F_(1,7));
@@ -321,10 +568,33 @@ void KalmanFilter3D::printF() {
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(7,0), F_(7,1), F_(7,2), F_(7,3), F_(7,4), F_(7,5), F_(7,6), F_(7,7));
 }
 
+/**
+ * @brief Helper function to display the matrix X.
+ * @details Helper function to display the matrix X.
+ * 
+ */
 void KalmanFilter3D::printX() {
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, X_(0), X_(1), X_(2), X_(3), X_(4), X_(5), X_(6), X_(7));
 }
 
+/**
+ * @brief Instantiates all the variables in the filter. 
+ * @details This function instantiates the following variables:
+ * X the state (R8), P the covariance (R8x8), Q the process noise (R8x8), R the observation noise (R?x?), F the dynamics (R8x8),
+ * H the observation matrix (R?x8), and I an identity matrix (R8x8).
+ * F, the dynamics is computed using the following equations:
+ * x_t+1 = x_t + vx_t * dt
+ * y_t+1 = y_t + vy_t * dt
+ * z_t+1 = z_t + vz_t * dt
+ * vx_t+1 = vx_t
+ * vy_t+1 = vy_t
+ * vz_t+1 = vz_t
+ * h_t+1 = h_t
+ * w_t+1 = w_t
+ * 
+ * @param Q The reference to the process noise vector (R8).
+ * @param R The reference to the measurement noise vector (R8).
+ */
 void KalmanFilter3D::initialize(const std::vector<float>& Q, const std::vector<float>& R) {
   // State is [x, y, z, vx ,vy, vz, h, w]
 #ifdef DEBUG_KALMAN
@@ -334,7 +604,7 @@ void KalmanFilter3D::initialize(const std::vector<float>& Q, const std::vector<f
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting state to 0.\n", __func__, __LINE__); 
 #endif
-  X_ << 0, 0, 0, 0, 0, 0, 0, 0;
+  X_ << 0, 0, 0, 0, 0, 0, 0, 0; // state is initialized a 0
 
   // Process noise
 #ifdef DEBUG_KALMAN
@@ -362,7 +632,7 @@ void KalmanFilter3D::initialize(const std::vector<float>& Q, const std::vector<f
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting P.\n", __func__, __LINE__); 
 #endif
   P_ = Eigen::MatrixXf::Zero(8,8);
-  P_ = Q_*Q_;
+  P_ = Q_*Q_; // P is initialialized at Q*Q
 
   // Helper matrices
 #ifdef DEBUG_KALMAN
@@ -374,13 +644,20 @@ void KalmanFilter3D::initialize(const std::vector<float>& Q, const std::vector<f
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting R.\n", __func__, __LINE__); 
 #endif
-  buildR(R);
+  buildR(R); // R is modular and depends on user choices. (use_dim, use_vel)
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting H.\n", __func__, __LINE__); 
 #endif
-  buildH();
+  buildH(); // H is modular and depends on user choices. (use_dim, use_vel)
 }
 
+/**
+ * @brief Instantiates the Observation matrix H.
+ * @details This function builds the observation matrix H based on the selected parameters.
+ * If the user selected use_vel, then the velocities will be observed and hence included in the observation matrix.
+ * If the user selected use_dim, then the height and width will be observed and hence included in the observation matrix.
+ * 
+ */
 void KalmanFilter3D::buildH(){
   int h_size = 3;
   if (use_vel_) {
@@ -422,6 +699,15 @@ void KalmanFilter3D::buildH(){
   }
 }
 
+/**
+ * @brief Instantiates the measurement noise R. 
+ * @details The function builds the measurement noise matrix R.
+ * The size of this matrix changes based on the selected parameters parameters.
+ * If the user selected use_vel, then the noise on the observed velocities will be added to the matrix.
+ * If the user selected use_dim, then the noise on the observed height and width will be added to the matrix.
+ * 
+ * @param R The reference to the vector containing the noise of the measurement (R8).
+ */
 void KalmanFilter3D::buildR(const std::vector<float>& R){
   int r_size = 3;
   if (use_vel_) {
@@ -455,6 +741,13 @@ void KalmanFilter3D::buildR(const std::vector<float>& R){
   }
 }
 
+/**
+ * @brief Resets the state and covariance.
+ * @details This function resets the state and covariance of the filter.
+ * The state is initialiazed to the value given by the user, the covariance is set to Q*Q.
+ * 
+ * @param initial_state The refence to the vector containing the value of the state should be reseted to (R8).
+ */
 void KalmanFilter3D::resetFilter(const std::vector<float>& initial_state) {
 #ifdef DEBUG_KALMAN
   printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Reinitializing state and covariance.\n", __func__, __LINE__); 
@@ -475,6 +768,14 @@ void KalmanFilter3D::resetFilter(const std::vector<float>& initial_state) {
   P_ = Q_*Q_;
 }
 
+/**
+ * @brief Converts the std::vector to a eigen::MatrixXf. 
+ * @details Converts the measurement (std::vector<float>) into a eigen::MatrixXf.
+ * It also ensures that the correct quantities are being observed.
+ * The user must give a vector of full size even if the values are not observed (use 0s instead).
+ * 
+ * @param measurement The reference to the measurement vector (R8).
+ */
 void KalmanFilter3D::getMeasurement(const std::vector<float>& measurement) {
   // State is [x, y, z, vx, vy, vz, h, w]
   Z_(0) = measurement[0];
@@ -500,6 +801,13 @@ void KalmanFilter3D::getMeasurement(const std::vector<float>& measurement) {
   }
 }
 
+/**
+ * @brief Updates the dynamics based on dt.
+ * @details Updates the dt value in the dynamics such that the propagation of the velocity is correct.
+ * We recall that x_t+1 = x_t + vx_t * dt, x_t being the position at time t, and vx_t being the velocity at time t.
+ * 
+ * @param dt 
+ */
 void KalmanFilter3D::updateF(const float& dt) {
   F_(0,3) = dt;
   F_(1,4) = dt;
