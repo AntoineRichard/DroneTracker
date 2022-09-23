@@ -1,3 +1,14 @@
+/**
+ * @file Tracker.h
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright University of Luxembourg | SnT | SpaceR 2022--2022
+ * @brief The header of the tracker class.
+ * @details This file implements simple algorithms to track objects.
+ */
+
 #ifndef TRACKER_H
 #define TRACKER_H
 
@@ -9,6 +20,14 @@
 #include <depth_image_extractor/Hungarian.h>
 #include <stdio.h>
 
+/**
+ * @brief An object to be tracked.
+ * @details A class that contains all the information required to track an object.
+ * It has a built-in Kalman filter, to predict the position of the object,
+ * and a set of method to evaluate if the object matches a given observation.
+ * It also keeps track of some object specific information.
+ * 
+ */
 class Object {
   protected:
     unsigned int nb_skipped_frames_;
@@ -29,6 +48,14 @@ class Object {
     virtual int getSkippedFrames();
 };
 
+/**
+ * @brief An object to be tracked.
+ * @details A class that contains all the information required to track an object.
+ * It has a built-in Kalman filter, to predict the position of the object,
+ * and a set of method to evaluate if the object matches a given observation.
+ * It also keeps track of some object specific information.
+ * 
+ */
 class Object2D : public Object {
   public:
     Object2D();
@@ -36,12 +63,29 @@ class Object2D : public Object {
     Object2D(const unsigned int&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
 };
 
+/**
+ * @brief An object to be tracked.
+ * @details A class that contains all the information required to track an object.
+ * It has a built-in Kalman filter, to predict the position of the object,
+ * and a set of method to evaluate if the object matches a given observation.
+ * It also keeps track of some object specific information.
+ * 
+ */
 class Object3D : public Object {
   public:
     Object3D();
     Object3D(const unsigned int&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
 };
 
+/**
+ * @brief An object tracker.
+ * @details This class tracks multiple objects.
+ * It uses their built-in kalman filter to estimate where the objects are going to be next.
+ * Then it compares their estimated position to a set observation to find the best possible match.
+ * This matching is done using the Hungarian Algorithm. Once the matching is done, the matches are analyzed and confirmed.
+ * The tracked objects which have an associated measurement are then updated.
+ * 
+ */
 class BaseTracker {
   private:
     void incrementFrame();
@@ -80,6 +124,15 @@ class BaseTracker {
     void getStates(std::map<unsigned int, std::vector<float>>&);
 };
 
+/**
+ * @brief An object tracker.
+ * @details This class tracks multiple objects.
+ * It uses their built-in kalman filter to estimate where the objects are going to be next.
+ * Then it compares their estimated position to a set observation to find the best possible match.
+ * This matching is done using the Hungarian Algorithm. Once the matching is done, the matches are analyzed and confirmed.
+ * The tracked objects which have an associated measurement are then updated.
+ * 
+ */
 class Tracker2D : public BaseTracker {
   protected:
     // Tracker state
@@ -93,6 +146,15 @@ class Tracker2D : public BaseTracker {
     Tracker2D(const int&, const float&, const float&, const float&, const float&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
 };
 
+/**
+ * @brief An object tracker.
+ * @details This class tracks multiple objects.
+ * It uses their built-in kalman filter to estimate where the objects are going to be next.
+ * Then it compares their estimated position to a set observation to find the best possible match.
+ * This matching is done using the Hungarian Algorithm. Once the matching is done, the matches are analyzed and confirmed.
+ * The tracked objects which have an associated measurement are then updated.
+ * 
+ */
 class Tracker3D : public BaseTracker {
   protected:
     // Tracker state
