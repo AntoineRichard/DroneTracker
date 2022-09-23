@@ -103,6 +103,7 @@ class KalmanFilter3D : public BaseKalmanFilter {
   public:
     KalmanFilter3D();
     KalmanFilter3D(const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+    ~KalmanFilter3D();
     void resetFilter(const std::vector<float>&) override;
     void updateF(const float&) override;
     void buildR(const std::vector<float>&) override;

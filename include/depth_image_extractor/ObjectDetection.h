@@ -9,6 +9,7 @@
  * @details This file implements an object detection class using TensorRT.
  * This class is meant to be use with the Yolo v5 from ultralytics: https://github.com/ultralytics/yolov5
  */
+
 #ifndef ObjectDetection_H
 #define ObjectDetection_H
 
