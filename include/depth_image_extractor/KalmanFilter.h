@@ -41,6 +41,10 @@ class BaseKalmanFilter {
 
     virtual void initialize(const std::vector<float>&, const std::vector<float>&);
     virtual void getMeasurement(const std::vector<float>&);
+    virtual void updateF(const float&);
+    virtual void buildR(const std::vector<float>&);
+    virtual void buildH();
+    // Display methods.
     virtual void printF();
     virtual void printX();
 
@@ -49,15 +53,45 @@ class BaseKalmanFilter {
     explicit BaseKalmanFilter(const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
     ~BaseKalmanFilter();
 
-    virtual void resetFilter(const std::vector<float>&);
-    virtual void updateF(const float&);
-    virtual void buildR(const std::vector<float>&);
-    virtual void buildH();
     void predict();
     void predict(const float&);
     void correct(const std::vector<float>&);
+    void resetFilter(const std::vector<float>&);
     void getState(std::vector<float>&);
     void getUncertainty(std::vector<float>&);
+};
+
+/**
+ * @brief An Extended Kalman filter object
+ * @details This object implements the default prediction and correction function of a non-linear Kalman filter.
+ * It also provides a set of helper function to debug or access its variables.
+ */
+class BaseExtendedKalmanFilter : public BaseKalmanFilter {
+  protected:
+    Eigen::MatrixXf dFdX_;
+
+    //virtual void initialize(const std::vector<float>&, const std::vector<float>&);
+    //virtual void getMeasurement(const std::vector<float>&);
+    //virtual void updateF(const float&);
+    virtual void updatedFdX(const float&);
+    virtual void updatedFdX();
+    virtual void updateF(const float&);
+    virtual void updateF();
+    //virtual void buildR(const std::vector<float>&);
+    //virtual void buildH();
+    // Display methods.
+    virtual void printdFdX();
+    //virtual void printF();
+    //virtual void printX();
+
+  public:
+    BaseExtendedKalmanFilter();
+    explicit BaseExtendedKalmanFilter(const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+    ~BaseExtendedKalmanFilter();
+
+    void predict();
+    void predict(const float&);
+    void correct(const std::vector<float>&);
 };
 
 /**
@@ -72,6 +106,10 @@ class KalmanFilter2D : public BaseKalmanFilter {
   protected:
     void initialize(const std::vector<float>&, const std::vector<float>&);
     void getMeasurement(const std::vector<float>&);
+    void updateF(const float&) override;
+    void buildR(const std::vector<float>&) override;
+    void buildH() override;
+    // Display methods.
     void printF() override;
     void printX() override;
 
@@ -79,10 +117,35 @@ class KalmanFilter2D : public BaseKalmanFilter {
     KalmanFilter2D();
     KalmanFilter2D(const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
     ~KalmanFilter2D();
-    virtual void resetFilter(const std::vector<float>&) override;
+};
+
+/**
+ * @brief A 2D (x,y) Kalman filter with heading.
+ * @details This class implements a filter to estimate the motion of objects in two dimensions.
+ * The state is composed of 8 variables: x, y, o, vx, vy, vo, w, h.
+ * x is the position on the x axis, y is the position on the y axis, o is the heading, vx and vy, are the velocities on the x and y axis respectively, vo is the angular velocity, w is the object width, and h is the object height.
+ * The measurement of this filter can be adjusted by the user. The position is always observed, but the velocity and the width/height can, or not, be observed.
+ * By default we recommend observing the width/height, and not the velocity. The filter will derive the velocity on its own after its first correction.
+ */
+class KalmanFilter2DH : public BaseExtendedKalmanFilter {
+  protected:
+    void initialize(const std::vector<float>&, const std::vector<float>&);
+    void getMeasurement(const std::vector<float>&);
+    void updateF() override;
     void updateF(const float&) override;
+    void updatedFdX() override;
+    void updatedFdX(const float&) override;
     void buildR(const std::vector<float>&) override;
     void buildH() override;
+    // Display methods.
+    void printF() override;
+    void printdFdX() override;
+    void printX() override;
+
+  public:
+    KalmanFilter2DH();
+    KalmanFilter2DH(const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+    ~KalmanFilter2DH();
 };
 
 /**
@@ -97,6 +160,10 @@ class KalmanFilter3D : public BaseKalmanFilter {
   protected:
     void initialize(const std::vector<float>&, const std::vector<float>&);
     void getMeasurement(const std::vector<float>&);
+    void updateF(const float&) override;
+    void buildR(const std::vector<float>&) override;
+    void buildH() override;
+    // Display methods.
     void printF() override;
     void printX() override;
 
@@ -104,10 +171,6 @@ class KalmanFilter3D : public BaseKalmanFilter {
     KalmanFilter3D();
     KalmanFilter3D(const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
     ~KalmanFilter3D();
-    void resetFilter(const std::vector<float>&) override;
-    void updateF(const float&) override;
-    void buildR(const std::vector<float>&) override;
-    void buildH() override;
 };
 
 #endif
