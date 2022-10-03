@@ -46,14 +46,14 @@ PoseEstimator::PoseEstimator(float rejection_threshold, float keep_threshold, fl
 }
 
 /**
- * @brief 
- * @details
+ * @brief Update the camera parameters.
+ * @details Updates the camera parameters.
  * 
- * @param cx 
- * @param cy 
- * @param fx 
- * @param fy 
- * @param K 
+ * @param cx The x principle point coordinate.
+ * @param cy The y principle point coordinate.
+ * @param fx The x scaling parameter.
+ * @param fy The y scaling parameter.
+ * @param K The reference to the plumb-blob model parameters.
  */
 void PoseEstimator::updateCameraParameters(float cx, float cy, float fx, float fy, std::vector<double> K) {
   cx_ = cx;
