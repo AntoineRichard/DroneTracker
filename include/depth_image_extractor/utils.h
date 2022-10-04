@@ -1,6 +1,8 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include <iostream>
+#include <fstream>
 
 static const std::vector<cv::Scalar> ColorPalette{
       cv::Scalar(0, 64, 255),
@@ -28,6 +30,73 @@ static const std::vector<cv::Scalar> ColorPalette{
       cv::Scalar(255, 0, 0),
       cv::Scalar(0, 0, 255)
   };
+
+class csvWriter {
+    private:
+        std::ofstream ofs_;
+        std::string separator_;
+        std::string endline_;
+        std::string filename_;
+        unsigned int max_buffer_size_;
+        std::vector<std::vector<float>> buffer_;
+
+        void makeHeader(std::vector<std::string> header) {
+            openFile();
+            for (unsigned int row=0; row < header.size(); row ++) {
+                ofs_ << header[row] << separator_;
+            }
+            ofs_ << endline_;
+            closeFile();
+        }
+
+        bool createFile() {
+            ofs_.open(filename_, std::ofstream::out | std::ofstream::trunc); 
+            closeFile();
+        }
+
+        void writeToFile() {
+            for (unsigned int line=0; line < buffer_.size(); line ++) {
+                for (unsigned int row=0; row < buffer_[line].size(); row ++) {
+                    ofs_ << std::to_string(buffer_[line][row]) << separator_;
+                }
+                ofs_ << endline_;
+            }
+            buffer_.clear();
+        }
+
+        void openFile() {
+            ofs_.open(filename_, std::ofstream::out | std::ofstream::app);
+        }
+        void closeFile() {
+            ofs_.close();
+        }
+    public:
+        csvWriter(std::string&  filename, std::string& separator, std::string& endline, std::vector<std::string>& header, unsigned int& max_buffer_size) : ofs_() {
+            ofs_.exceptions(std::ios::failbit | std::ios::badbit);
+            separator_ = separator;
+            endline_ = endline;
+            filename_ = filename;
+            createFile();
+            makeHeader(header);
+        }
+
+        ~csvWriter() {
+            flush();
+        }
+
+        void flush() {
+            openFile();
+            writeToFile();
+            closeFile();
+        }
+
+        bool addToBuffer(std::vector<float> data) {
+            buffer_.push_back(data);
+            if (buffer_.size() >= max_buffer_size_) {
+                flush();
+            }
+        }
+};
 
 class BoundingBox {
     public:
