@@ -12,3 +12,4 @@ min_bbox_width: 60
 max_bbox_width: 400
 min_bbox_height: 60
 max_bbox_height: 300
+tracking_mode: 2D
