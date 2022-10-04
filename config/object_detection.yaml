@@ -1,6 +1,10 @@
-nms_tresh: 0.45
+path_to_engine: somewhere_on_your_drive
+class_map: [object1, object2, object3, object4]
+num_classes: 4
+buffer_size: 2
 image_width: 640
 image_height: 480
+nms_tresh: 0.45
 conf_tresh: 0.25
 max_output_bbox_count: 1000
-classes: {NUM_CLASSES: 1, DRONES: 0}
+rotated_bounding_boxes: false

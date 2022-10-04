@@ -1,0 +1,8 @@
+path_to_engine: "/home/antoine/Documents/RockDetection/weights/yolov5s_400.engine"
+class_map: [Rock, Crater]
+num_classes: 2
+nms_tresh: 0.45
+image_width: 640
+image_height: 480
+conf_tresh: 0.25
+max_output_bbox_count: 1000
