@@ -1,6 +1,0 @@
-<launch>
-  <node name="object_detector" pkg="depth_image_extractor" type="tensorRT_detection_v2" output="screen">
-    <param name="path_to_engine" type="string" value="/home/antoine/Documents/Sesame/Detection/Networks/yolov5/runs/train/model_xavier/weights/last.engine"/>
-    <param name="size" type="int" value="640"/>
-  </node>
-</launch>

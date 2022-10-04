@@ -71,8 +71,6 @@ add_library(KalmanFilter src/KalmanFilter.cpp)
 add_library(Hungarian src/Hungarian.cpp)
 
 add_executable(depth_extractor src/depth_extractor.cpp)
-add_executable(tensorRT_detection_v1 src/tensorRT_detection_v1.cpp)
-add_executable(tensorRT_detection_v2 src/tensorRT_detection_v2.cpp)
 add_executable(detection_node src/detection_node.cpp)
 add_executable(detection_and_position_node src/detection_and_position_node.cpp)
 add_executable(detect_locate_and_in_image_tracking_node src/detect_locate_and_in_image_tracking_node.cpp)
@@ -81,20 +79,6 @@ add_executable(detect_locate_and_in_image_tracking_node src/detect_locate_and_in
 target_link_libraries(depth_extractor
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
-)
-
-target_link_libraries(tensorRT_detection_v1
-    ${catkin_LIBRARIES}
-    ${OpenCV_LIBS}
-    nvinfer
-    cudart
-)
-
-target_link_libraries(tensorRT_detection_v2
-    ${catkin_LIBRARIES}
-    ${OpenCV_LIBS}
-    nvinfer
-    cudart
 )
 
 target_link_libraries(detection_node
