@@ -1,2 +1,2 @@
 Header header
-depth_image_extractor/PositionID[] positions
+detect_and_track/PositionID[] positions

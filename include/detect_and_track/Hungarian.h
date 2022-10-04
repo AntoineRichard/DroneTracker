@@ -1,13 +1,15 @@
-///////////////////////////////////////////////////////////////////////////////
-// Hungarian.h: Header file for Class HungarianAlgorithm.
-// 
-// This is a C++ wrapper with slight modification of a hungarian algorithm implementation by Markus Buehren.
-// The original implementation is a few mex-functions for use in MATLAB, found here:
-// http://www.mathworks.com/matlabcentral/fileexchange/6543-functions-for-the-rectangular-assignment-problem
-// 
-// Both this code and the orignal code are published under the BSD license.
-// by Cong Ma, 2016
-// 
+/**
+ * @file Hungarian.h
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright Cong Ma | 2016
+ * @brief Implementation file for Class HungarianAlgorithm.
+ * @details This is a C++ wrapper with slight modification of a hungarian algorithm implementation by Markus Buehren.
+ * The original implementation is a few mex-functions for use in MATLAB, found here:
+ * http://www.mathworks.com/matlabcentral/fileexchange/6543-functions-for-the-rectangular-assignment-problem
+ */
 
 #ifndef HUNGARIAN_H
 #define HUNGARIAN_H
@@ -17,7 +19,10 @@
 
 using namespace std;
 
-
+/**
+ * @brief 
+ * 
+ */
 class HungarianAlgorithm
 {
 public:

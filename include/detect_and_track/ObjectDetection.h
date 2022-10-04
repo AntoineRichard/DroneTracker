@@ -24,8 +24,8 @@
 // CUDA/TENSOR_RT
 #include <NvInfer.h>
 #include <cuda_runtime_api.h>
-#include <depth_image_extractor/logging.h>
-#include <depth_image_extractor/utils.h>
+#include <detect_and_track/logging.h>
+#include <detect_and_track/utils.h>
 
 #define CUDA_CHECK(callstr)                                                    \
   {                                                                            \
@@ -36,12 +36,6 @@
       assert(0);                                                               \
     }                                                                          \
   }
-
-enum ObjectClass { CLASS_DRONE = 0, NUM_CLASS = 1 };
-
-static const std::vector<std::string> ClassMap{
-  std::string("Drone")
-};
 
 /**
  * @brief An object that is used to detect objects in images.
@@ -60,6 +54,7 @@ class ObjectDetector {
     int input_size_;
     int output_size_;
     int buffer_size_;
+    int num_classes_;
 
     // TensorRT primitives 
     nvinfer1::ICudaEngine *engine_;
@@ -83,7 +78,7 @@ class ObjectDetector {
     void sendBufferToGPU();
     void getBufferFromGPU();
     void inferNetwork();
-    void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&);
+    virtual void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&);
 
   public:
     ObjectDetector();
@@ -92,9 +87,30 @@ class ObjectDetector {
                    float,
                    size_t,
                    int,
+                   int,
                    int);
     ~ObjectDetector();
     void detectObjects(cv::Mat, std::vector<std::vector<BoundingBox>>&);
 };
+
+/**
+ * @brief An object that is used to detect objects in images.
+ * @details An object that is used to detect objects in images.
+ */
+/** class ObjectDetectorRotation : public ObjectDetector {
+  private:
+    void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&) override;
+
+  public:
+    ObjectDetectorRotation();
+    ObjectDetectorRotation(std::string,
+                   float,
+                   float,
+                   size_t,
+                   int,
+                   int,
+                   int);
+    ~ObjectDetectorRotation();
+}; **/
 
 #endif

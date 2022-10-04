@@ -9,7 +9,7 @@
  * @details This file implements simple algorithms to track objects.
  */
 
-#include <depth_image_extractor/Tracker.h>
+#include <detect_and_track/Tracker.h>
 
 /**
  * @brief Default constructor

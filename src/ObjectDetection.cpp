@@ -15,7 +15,7 @@
 #include <sstream>
 
 // CUDA/TENSOR_RT
-#include <depth_image_extractor/ObjectDetection.h>
+#include <detect_and_track/ObjectDetection.h>
 
 /**
  * @brief Default constructor

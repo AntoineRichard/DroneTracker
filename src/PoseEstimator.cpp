@@ -9,7 +9,7 @@
  * @details This file implements a simple algorithm to estimate the position of objects inside bounding boxes.
  */
 
-#include <depth_image_extractor/PoseEstimator.h>
+#include <detect_and_track/PoseEstimator.h>
 
 /**
  * @brief Default constructor.

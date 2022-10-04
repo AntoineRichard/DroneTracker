@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>depth_image_extractor</name>
+  <name>detect_and_track</name>
   <version>0.0.0</version>
-  <description>The depth_image_extractor package</description>
+  <description>The detect_and_track package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/depth_image_extractor</url> -->
+  <!-- <url type="website">http://wiki.ros.org/detect_and_track</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->

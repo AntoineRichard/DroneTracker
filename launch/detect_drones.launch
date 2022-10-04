@@ -2,8 +2,8 @@
   <param name="use_sim_time" value="true"/>
 
   <group ns="object_detector">
-    <rosparam file="$(find depth_image_extractor)/config/object_detection_drone.yaml"/>
+    <rosparam file="$(find detect_and_track)/config/object_detection_drone.yaml"/>
   </group>
-  <node name="object_detector" pkg="depth_image_extractor" type="detection_node" output="screen">
+  <node name="object_detector" pkg="detect_and_track" type="detection_node" output="screen">
   </node>
 </launch>

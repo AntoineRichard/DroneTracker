@@ -1,2 +1,2 @@
 Header header
-depth_image_extractor/BoundingBox2D[] bboxes
+detect_and_track/BoundingBox2D[] bboxes

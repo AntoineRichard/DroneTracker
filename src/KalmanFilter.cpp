@@ -9,7 +9,7 @@
  * @details This file implements a set of kalman filter for object tracking.
  */
 
-#include <depth_image_extractor/KalmanFilter.h>
+#include <detect_and_track/KalmanFilter.h>
 
 /**
  * @brief Default constructor.

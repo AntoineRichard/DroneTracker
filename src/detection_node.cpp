@@ -2,9 +2,9 @@
 #include <vector>
 #include <map>
 
-#include <depth_image_extractor/ObjectDetection.h>
-#include <depth_image_extractor/BoundingBox2D.h>
-#include <depth_image_extractor/BoundingBoxes2D.h>
+#include <detect_and_track/ObjectDetection.h>
+#include <detect_and_track/BoundingBox2D.h>
+#include <detect_and_track/BoundingBoxes2D.h>
 
 // ROS
 #include <opencv2/opencv.hpp>
@@ -75,7 +75,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_() {
 #ifdef PUBLISH_DETECTION_IMAGE
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
 #endif
-  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBoxes2D>("/detection/bounding_boxes", 1);
+  bboxes_pub_ = nh_.advertise<detect_and_track::BoundingBoxes2D>("/detection/bounding_boxes", 1);
 }
 
 ROSDetector::~ROSDetector() {
@@ -157,9 +157,9 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   detection_pub_.publish(image_ptr_out_);
 #endif
   unsigned int counter = 0;
-  depth_image_extractor::BoundingBoxes2D ros_bboxes;
-  depth_image_extractor::BoundingBox2D ros_bbox;
-  std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
+  detect_and_track::BoundingBoxes2D ros_bboxes;
+  detect_and_track::BoundingBox2D ros_bbox;
+  std::vector<detect_and_track::BoundingBox2D> vec_ros_bboxes;
 
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size(); j++) {

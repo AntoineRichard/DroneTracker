@@ -16,8 +16,8 @@
 #include <vector>
 #include <map>
 
-#include <depth_image_extractor/KalmanFilter.h>
-#include <depth_image_extractor/Hungarian.h>
+#include <detect_and_track/KalmanFilter.h>
+#include <detect_and_track/Hungarian.h>
 #include <stdio.h>
 
 /**

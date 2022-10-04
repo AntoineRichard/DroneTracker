@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(depth_image_extractor)
+project(detect_and_track)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -53,7 +53,7 @@ generate_messages(
 catkin_package(
   DEPENDS  OpenCV
   INCLUDE_DIRS include
-#  LIBRARIES depth_image_extractor
+#  LIBRARIES detect_and_track
   CATKIN_DEPENDS cv_bridge image_transport roscpp sensor_msgs std_msgs
 #  DEPENDS system_lib
 )

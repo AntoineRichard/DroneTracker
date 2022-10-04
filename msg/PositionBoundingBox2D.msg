@@ -1,2 +1,2 @@
-depth_image_extractor/BoundingBox2D bbox
+detect_and_track/BoundingBox2D bbox
 geometry_msgs/Point position

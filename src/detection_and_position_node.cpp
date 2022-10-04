@@ -2,14 +2,14 @@
 #include <vector>
 #include <map>
 
-#include <depth_image_extractor/ObjectDetection.h>
-#include <depth_image_extractor/PoseEstimator.h>
-#include <depth_image_extractor/BoundingBox2D.h>
-#include <depth_image_extractor/BoundingBoxes2D.h>
-#include <depth_image_extractor/PositionBoundingBox2D.h>
-#include <depth_image_extractor/PositionBoundingBox2DArray.h>
-#include <depth_image_extractor/PositionID.h>
-#include <depth_image_extractor/PositionIDArray.h>
+#include <detect_and_track/ObjectDetection.h>
+#include <detect_and_track/PoseEstimator.h>
+#include <detect_and_track/BoundingBox2D.h>
+#include <detect_and_track/BoundingBoxes2D.h>
+#include <detect_and_track/PositionBoundingBox2D.h>
+#include <detect_and_track/PositionBoundingBox2DArray.h>
+#include <detect_and_track/PositionID.h>
+#include <detect_and_track/PositionIDArray.h>
 
 // ROS
 #include <opencv2/opencv.hpp>
@@ -98,10 +98,10 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
 #endif
 #ifdef PUBLISH_DETECTION_WITH_POSITION
-  positions_bboxes_pub_ = nh_.advertise<depth_image_extractor::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
+  positions_bboxes_pub_ = nh_.advertise<detect_and_track::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
 #else
-  positions_pub_ = nh_.advertise<depth_image_extractor::PositionIDArray>("/detection/positions",1);
-  bboxes_pub_ = nh_.advertise<depth_image_extractor::BoundingBoxes2D>("/detection/bounding_boxes", 1);
+  positions_pub_ = nh_.advertise<detect_and_track::PositionIDArray>("/detection/positions",1);
+  bboxes_pub_ = nh_.advertise<detect_and_track::BoundingBoxes2D>("/detection/bounding_boxes", 1);
 #endif
 }
 
@@ -214,9 +214,9 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   detection_pub_.publish(image_ptr_out_);
 #endif
 #ifdef PUBLISH_DETECTION_WITH_POSITION
-  depth_image_extractor::PositionBoundingBox2DArray ros_bboxes;
-  depth_image_extractor::PositionBoundingBox2D ros_bbox;
-  std::vector<depth_image_extractor::PositionBoundingBox2D> vec_ros_bboxes;
+  detect_and_track::PositionBoundingBox2DArray ros_bboxes;
+  detect_and_track::PositionBoundingBox2D ros_bbox;
+  std::vector<detect_and_track::PositionBoundingBox2D> vec_ros_bboxes;
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
@@ -241,12 +241,12 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 
 #else
   unsigned int counter = 0;
-  depth_image_extractor::BoundingBoxes2D ros_bboxes;
-  depth_image_extractor::BoundingBox2D ros_bbox;
-  depth_image_extractor::PositionIDArray id_positions;
-  depth_image_extractor::PositionID id_position;
-  std::vector<depth_image_extractor::BoundingBox2D> vec_ros_bboxes;
-  std::vector<depth_image_extractor::PositionID> vec_id_positions;
+  detect_and_track::BoundingBoxes2D ros_bboxes;
+  detect_and_track::BoundingBox2D ros_bbox;
+  detect_and_track::PositionIDArray id_positions;
+  detect_and_track::PositionID id_position;
+  std::vector<detect_and_track::BoundingBox2D> vec_ros_bboxes;
+  std::vector<detect_and_track::PositionID> vec_id_positions;
 
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size(); j++) {

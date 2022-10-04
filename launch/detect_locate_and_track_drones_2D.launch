@@ -2,13 +2,13 @@
   <param name="use_sim_time" value="true"/>
 
   <group ns="detect_locate_and_track">
-    <rosparam file="$(find depth_image_extractor)/config/object_detection_drone.yaml"/>
-    <rosparam file="$(find depth_image_extractor)/config/pose_estimator_drone.yaml"/>
-    <rosparam file="$(find depth_image_extractor)/config/image_tracker_drone.yaml"/>
+    <rosparam file="$(find detect_and_track)/config/object_detection_drone.yaml"/>
+    <rosparam file="$(find detect_and_track)/config/pose_estimator_drone.yaml"/>
+    <rosparam file="$(find detect_and_track)/config/image_tracker_drone.yaml"/>
   </group>
   <node pkg="tf" type="static_transform_publisher" name="optitrack_to_camera" args="-0.0613 0.0249 -0.01658 -0.02913035  -0.02442605 -0.42248077  0.90557429 d435i base_link 10" />
 
-  <node name="detect_locate_and_track" pkg="depth_image_extractor" type="detect_locate_and_in_image_tracking_node" output="screen">
+  <node name="detect_locate_and_track" pkg="detect_and_track" type="detect_locate_and_in_image_tracking_node" output="screen">
     <remap from="/camera/color/image_raw" to="/camera01/color/image_raw"/>
   </node>
 </launch>
