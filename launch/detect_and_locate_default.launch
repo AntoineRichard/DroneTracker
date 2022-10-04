@@ -1,0 +1,10 @@
+<launch>
+  <param name="use_sim_time" value="true"/>
+
+  <group ns="detect_and_locate">
+    <rosparam file="$(find depth_image_extractor)/config/object_detection.yaml"/>
+    <rosparam file="$(find depth_image_extractor)/config/pose_estimator.yaml"/>
+  </group>
+  <node name="detect_and_locate" pkg="depth_image_extractor" type="detection_and_position_node" output="screen">
+  </node>
+</launch>

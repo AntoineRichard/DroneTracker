@@ -1,0 +1,16 @@
+<launch>
+  <param name="use_sim_time" value="true"/>
+
+  <group ns="detect_locate_and_track">
+    <rosparam file="$(find depth_image_extractor)/config/object_detection_rock.yaml"/>
+    <rosparam file="$(find depth_image_extractor)/config/pose_estimator.yaml"/>
+    <rosparam file="$(find depth_image_extractor)/config/image_tracker_rock.yaml"/>
+  </group>
+
+  <node pkg="tf" type="static_transform_publisher" name="optitrack_to_robot" args="0.0 0.0 0.0 0.0 0.0 0.0 1.0 robot base_link 10" />
+
+  <node name="detect_locate_and_track" pkg="depth_image_extractor" type="detect_locate_and_in_image_tracking_node" output="screen">
+    <remap from="/camera/color/image_raw" to="/camera01/color/image_raw"/>
+    <remap from="/camera/aligned_depth_to_color/image_raw" to="/camera01/aligned_depth_to_color/image_raw"/>
+  </node>
+</launch>
