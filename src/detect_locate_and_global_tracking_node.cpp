@@ -16,10 +16,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <image_transport/image_transport.h>
-#include <ros/ros.h>
 #include <tf/transform_listener.h>
-
-# define M_PI           3.14159265358979323846  /* pi */
+#include <ros/ros.h>
 
 class ROSDetector {
   private:
@@ -28,6 +26,7 @@ class ROSDetector {
 
     image_transport::Subscriber image_sub_;
     image_transport::Subscriber depth_sub_;
+
 #ifdef PUBLISH_DETECTION_IMAGE   
     image_transport::Publisher detection_pub_;
 #endif
@@ -48,6 +47,10 @@ class ROSDetector {
     cv::Mat padded_image_;
     cv::Mat depth_image_;
     sensor_msgs::ImagePtr image_ptr_out_;
+    
+    // Object detector parameters
+    int num_classes_;
+    std::vector<std::string> class_map_;
 
     // Transform parameters
     tf::TransformListener listener_;
@@ -68,23 +71,48 @@ class ROSDetector {
     ~ROSDetector();
 };
 
-ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
-  float nms_tresh, conf_tresh;
-  int max_output_bbox_count;
-  
+ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() { 
+  // Object detector parameters
+  std::vector<std::string> default_class_map {std::string("object")};
   std::string default_path_to_engine("None");
   std::string path_to_engine;
-
   nh_.param("nms_tresh",nms_tresh,0.45f);
   nh_.param("image_size",image_size_,640);
   nh_.param("conf_tresh",conf_tresh,0.25f);
   nh_.param("max_output_bbox_count", max_output_bbox_count, 1000);
   nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
+  nh_.param("num_classes", num_classes_, 1);
+  nh_.param("class_map", class_map_, default_class_map);
   nh_.param("image_rows", image_rows_, 480);
   nh_.param("image_cols", image_cols_, 640);
 
-  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
+  // Tracker parameters
+  float nms_tresh, conf_tresh;
+  int max_output_bbox_count;
+  std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
+  std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
+  Q_.resize(6);
+  R_.resize(6);
+  nh_.param("max_frames_to_skip", max_frames_to_skip_, 15);
+  nh_.param("dist_threshold", dist_threshold_, 150.0f);
+  nh_.param("center_threshold", center_threshold_, 80.0f);
+  nh_.param("area_threshold", area_threshold_, 3.0f);
+  nh_.param("body_ratio", body_ratio_, 0.5f);
+  nh_.param("dt", dt_, 0.02f);
+  nh_.param("use_dim", use_dim_, true);
+  nh_.param("use_vel", use_vel_, false);
+  nh_.param("Q", Q_, default_Q);
+  nh_.param("R", R_, default_R);
+  nh_.param("max_bbox_width", max_bbox_width_, 400.0f);
+  nh_.param("max_bbox_height", max_bbox_height_, 300.0f);
+  nh_.param("min_bbox_width", min_bbox_width_, 60.0f);
+  nh_.param("min_bbox_height", min_bbox_height_, 60.0f);
+
+  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_, num_classes_);
   PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
+  TR_ = new Tracker(max_frames_to_skip_, dist_threshold_, center_threshold_,
+                    area_threshold_, body_ratio_, dt_, use_dim_,
+                    use_z_, use_vel_, Q_, R_);
   
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 

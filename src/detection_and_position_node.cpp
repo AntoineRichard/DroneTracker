@@ -47,6 +47,10 @@ class ROSDetector {
     cv::Mat depth_image_;
     sensor_msgs::ImagePtr image_ptr_out_;
 
+    // Object detector parameters
+    int num_classes_;
+    std::vector<std::string> class_map_;
+
     ObjectDetector* OD_;
     PoseEstimator* PE_;
 
@@ -69,7 +73,10 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   std::string path_to_engine;
 
   // Object detector parameters
+  std::vector<std::string> default_class_map {std::string("object")};
   nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
+  nh_.param("num_classes", num_classes_, 1);
+  nh_.param("class_map", class_map_, default_class_map);
   nh_.param("image_height", image_rows_, 480);
   nh_.param("image_width", image_cols_, 640);
   nh_.param("nms_tresh",nms_tresh,0.45f);
@@ -79,7 +86,7 @@ ROSDetector::ROSDetector() : nh_("~"), it_(nh_), OD_(), PE_() {
   image_size_ = std::max(image_cols_, image_rows_);
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
-  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh, max_output_bbox_count, 2, image_size_);
+  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh, max_output_bbox_count, 2, image_size_, num_classes_);
   PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_);
   
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
@@ -164,7 +171,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   auto end_image = std::chrono::system_clock::now();
   auto start_detection = std::chrono::system_clock::now();
 #endif
-  std::vector<std::vector<BoundingBox>> bboxes(ObjectClass::NUM_CLASS);
+  std::vector<std::vector<BoundingBox>> bboxes(num_classes_);
   OD_->detectObjects(padded_image_, bboxes);
   adjustBoundingBoxes(bboxes);
 #ifdef PROFILE
@@ -196,7 +203,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
       }
       const cv::Rect rect(bboxes[i][j].x_min_, bboxes[i][j].y_min_, bboxes[i][j].w_, bboxes[i][j].h_);
       cv::rectangle(image, rect, ColorPalette[i], 3);
-      cv::putText(image, ClassMap[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
+      cv::putText(image, class_map_[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
     }
   }
 

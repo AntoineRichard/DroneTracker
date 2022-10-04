@@ -42,13 +42,15 @@ ObjectDetector::ObjectDetector(std::string path_to_engine,
                    float conf_tresh,
                    size_t max_output_bbox_count,
                    int buffer_size,
-                   int image_size) {
+                   int image_size,
+                   int num_classes) {
   path_to_engine_ = path_to_engine;
   nms_tresh_ = nms_tresh;
   conf_tresh_ = conf_tresh;
   max_output_bbox_count_ = max_output_bbox_count;
   buffer_size_ = buffer_size;
   image_size_ = image_size;
+  num_classes_ = num_classes;
 
   buffers_.resize(buffer_size_);
 
@@ -248,22 +250,21 @@ void ObjectDetector::detectObjects(cv::Mat image, std::vector<std::vector<Boundi
  * @param bboxes The reference to a vector of vectors of bounding boxes.
  */
 void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>> &bboxes) {
-  bboxes.resize(ObjectClass::NUM_CLASS);
+  bboxes.resize(num_classes_);
   int class_id;
   float conf; 
 
-  for (int c = 0; c < ObjectClass::NUM_CLASS; ++c) {
+  for (int c = 0; c < num_classes_; ++c) {
     bboxes[c].reserve(output_size_);
   }
-
   // Bounding box is min_x, min_y, width, height, conf, class1, class2, ...
-  for (int i = 0; i < output_size_; i += (ObjectClass::NUM_CLASS + 5)) {
+  for (int i = 0; i < output_size_; i += (num_classes_ + 5)) {
     conf = output_data_.get()[i + 4];
     if (conf > conf_tresh_) {
       assert(conf <= 1.0f);
       // Get all the probabilities that this objects belong to a given class
-      std::vector<float> probabilities(ObjectClass::NUM_CLASS);
-      for (unsigned int j=0; i < ObjectClass::NUM_CLASS; j++){
+      std::vector<float> probabilities(num_classes_);
+      for (unsigned int j=0; i < num_classes_; j++){
         // 4 : minx, miny, width, height, conf
         // i : number of objects
         // j : number of classes
@@ -275,9 +276,8 @@ void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>>
       bboxes[class_id].push_back(BoundingBox(output_data_.get() + i));
     }
   }
-
   // Non-maximum supression
-  for (int c = 0; c < ObjectClass::NUM_CLASS; ++c) {
+  for (int c = 0; c < num_classes_; ++c) {
     std::sort(bboxes[c].begin(), bboxes[c].end(),
               BoundingBox::sortComparisonFunction);
     const size_t bboxes_size = bboxes[c].size();

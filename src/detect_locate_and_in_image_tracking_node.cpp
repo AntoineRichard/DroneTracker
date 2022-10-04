@@ -58,6 +58,10 @@ class ROSDetector {
     cv::Mat depth_image_;
     sensor_msgs::ImagePtr image_ptr_out_;
 
+    // Object detector parameters
+    int num_classes_;
+    std::vector<std::string> class_map_;
+
     // Transform parameters
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener listener_;
@@ -112,7 +116,10 @@ ROSDetector::ROSDetector() : nh_("~"), listener_(tf_buffer_), it_(nh_), OD_(), P
   int max_output_bbox_count; 
   std::string default_path_to_engine("None");
   std::string path_to_engine;
+  std::vector<std::string> default_class_map {std::string("object")};
   nh_.param("path_to_engine", path_to_engine, default_path_to_engine);
+  nh_.param("num_classes", num_classes_, 1);
+  nh_.param("class_map", class_map_, default_class_map);
   nh_.param("image_rows", image_rows_, 480);
   nh_.param("image_cols", image_cols_, 640);
   nh_.param("nms_tresh",nms_tresh,0.45f);
@@ -128,7 +135,7 @@ ROSDetector::ROSDetector() : nh_("~"), listener_(tf_buffer_), it_(nh_), OD_(), P
   nh_.param("dist_threshold", dist_threshold_, 150.0f);
   nh_.param("center_threshold", center_threshold_, 80.0f);
   nh_.param("area_threshold", area_threshold_, 3.0f);
-  nh_.param("body_ration", body_ratio_, 0.5f);
+  nh_.param("body_ratio", body_ratio_, 0.5f);
   nh_.param("dt", dt_, 0.02f);
   nh_.param("use_dim", use_dim_, true);
   nh_.param("use_vel", use_vel_, false);
@@ -146,9 +153,9 @@ ROSDetector::ROSDetector() : nh_("~"), listener_(tf_buffer_), it_(nh_), OD_(), P
   padded_image_ = cv::Mat::zeros(image_size_, image_size_, CV_8UC3);
 
   // Object instantiation
-  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh,max_output_bbox_count, 2, image_size_);
+  OD_ = new ObjectDetector(path_to_engine, nms_tresh, conf_tresh, max_output_bbox_count, 2, image_size_, num_classes_);
   PE_ = new PoseEstimator(0.02, 0.15, 58.0, 87.0, image_rows_, image_cols_); 
-  for (unsigned int i=0; i<ObjectClass::NUM_CLASS; i++){ // Create as many trackers as their are classes
+  for (unsigned int i=0; i<num_classes_; i++){ // Create as many trackers as their are classes
     Trackers_.push_back(new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
                       area_threshold_, body_ratio_, dt_, use_dim_,
                       use_vel_, Q_, R_)); 
@@ -241,6 +248,7 @@ void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& stat
       if (!bboxes[i][j].valid_) {
         continue;
       }
+      ROS_INFO("w:%d, h:%d", int(bboxes[i][j].w_), int(bboxes[i][j].h_));
       if (bboxes[i][j].h_ > max_bbox_height_) {
         continue;
       }
@@ -260,7 +268,7 @@ void ROSDetector::cast2states(std::vector<std::vector<std::vector<float>>>& stat
       state[4] = bboxes[i][j].w_;
       state[5] = bboxes[i][j].h_;
       state_vec.push_back(state);
-      ROS_INFO("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", i, state[0], state[1], state[2], state[3], state[4], state[5]);
+      ROS_INFO("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", j, state[0], state[1], state[2], state[3], state[4], state[5]);
     }
     states.push_back(state_vec);
   }
@@ -289,7 +297,7 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   auto end_image = std::chrono::system_clock::now();
   auto start_detection = std::chrono::system_clock::now();
 #endif
-  std::vector<std::vector<BoundingBox>> bboxes(ObjectClass::NUM_CLASS);
+  std::vector<std::vector<BoundingBox>> bboxes(num_classes_);
   OD_->detectObjects(padded_image_, bboxes);
   adjustBoundingBoxes(bboxes);
 #ifdef PROFILE
@@ -298,9 +306,9 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif 
   std::vector<std::vector<std::vector<float>>> states;
   std::vector<std::map<unsigned int, std::vector<float>>> tracker_states;
-  tracker_states.resize(ObjectClass::NUM_CLASS);
+  tracker_states.resize(num_classes_);
   cast2states(states, bboxes);
-  for (unsigned int i=0; i < ObjectClass::NUM_CLASS; i++){
+  for (unsigned int i=0; i < num_classes_; i++){
     std::vector<std::vector<float>> states_to_track;
     states_to_track = states[i];
     Trackers_[i]->update(dt_, states_to_track);
@@ -334,14 +342,18 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   ROS_INFO("x: %.3f,y: %.3f, z: %.3f", uav_pose_cam_.pose.position.x, uav_pose_cam_.pose.position.y, uav_pose_cam_.pose.position.z);
   ROS_INFO("u: %.3f,v: %.3f", u, v);
   cv:circle(image, cv::Point(u,v), 10, cv::Scalar(255,0,0),cv::FILLED, cv::LINE_8);
+  unsigned int num_bboxes = 0;
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size()+1; j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
+      if (i == 0) {
+        num_bboxes ++;
+      }
       const cv::Rect rect(bboxes[i][j].x_min_, bboxes[i][j].y_min_, bboxes[i][j].w_, bboxes[i][j].h_);
       cv::rectangle(image, rect, ColorPalette[0], 3);
-      cv::putText(image, ClassMap[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
+      cv::putText(image, class_map_[i], cv::Point(bboxes[i][j].x_min_,bboxes[i][j].y_min_-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[i], 2);
     }
   }
 
@@ -349,9 +361,10 @@ void ROSDetector::imageCallback(const sensor_msgs::ImageConstPtr& msg){
     for (auto & element : tracker_states[i]) {
       cv::Rect rect(element.second[0] - element.second[4]/2, element.second[1]-element.second[5]/2, element.second[4], element.second[5]);
       cv::rectangle(image_tracker, rect, ColorPalette[element.first % 24], 3);
-      cv::putText(image_tracker, ClassMap[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[4]/2,element.second[1]-element.second[5]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
+      cv::putText(image_tracker, class_map_[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[4]/2,element.second[1]-element.second[5]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
     }
   }
+  ROS_INFO("num detected bboxes: %d", num_bboxes);
   
   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
   std_msgs::Header image_ptr_out_header;
