@@ -20,30 +20,31 @@
 
 /**
  * @brief Estimates the position of detected objects.
- * @details This class uses the bounding box and a depth image to estimate the relative position of objects inside it.
- * To estimate the position, the algorithm calculates the distance between every point inside the bounding box and the center of the camera.
- * For this purpose two models can be used, an inverse pinhole, or an inverse plumb blob. This is set through compilation flags.
- * -DBROWNCONRADY enables the plumb blob model. This is not recommended by default it requires a gradient descent to compute the inverse of this model.
- * Hence it is heavier than the pinhole.
- * Then, the 5% closest points are removed as considered as potential outliers (too close, noise in the camera).
- * Of the remaining points, the 10% smallest are then averaged to get the distance to the object.
- * The distance is then used inside a pin-hole model as follows:
- * ix = x * fx + cx
- * iy = y * fy + cy
- * x = ix * z
- * y = iy * z
- * d = sqrt(x*x + y*y + z*z)
- * d = z*sqrt(ix*ix + iy*iy + 1)
- * z = d/sqrt(ix*ix + iy*iy + 1)
+ * @details This object implements different methods to estimate the position and distance of 
+ * objects detected within RGB-D images. It also allows the user to choose between different
+ * camera model which we detail bellow: \n
+ *  - "pin_hole" model, a simple model that does not account for lens deformations.
+ *  In most situations this model is sufficient. \n
+ *  - "plumb_blob" model, a more complicated model that adds lens deformation to
+ *  the Pin-Hole model. This model is slower, as to compute its inverse we need to
+ * estimate it through a short gradient descent. \n
+ * To estimate the distance and position we then provide 2 different modes: \n 
+ *  - "center": this mode takes the distance at the center of the bounding box
+ *  to estimate the distance and position of the objects. It's fast, but may be
+ *  wrong on thin objects like drones where the center of the bounding can be empty. \n
+ *  - "min_distance": this mode takes the filtered minimal distance to estimate the
+ *  distance to the center of the dected object. This is will create an offset, as
+ *  the distance measured is the smallest, and is sensitive to obstructions. However,
+ *  it always ensure that the measured distance is the one of the object. \n 
  */
 class PoseEstimator {
   private:
     float rejection_threshold_;
     float keep_threshold_;
-    float vertical_fov_;
-    float horizontal_fov_;
     int image_height_;
     int image_width_;
+    int distortion_model_;
+    int position_mode_;
 
     float fx_;
     float fy_;

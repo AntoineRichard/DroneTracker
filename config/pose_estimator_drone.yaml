@@ -1,0 +1,6 @@
+lens_distortion_model: "pin_hole"
+K: [0,0,0,0,0]
+camera_parameters: [607.7302246, 606.1353759, 327.865113, 246.6830596]
+position_mode: "min_distance"
+rejection_threshold: 0.05
+keep_threshold: 0.1

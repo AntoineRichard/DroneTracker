@@ -12,37 +12,94 @@
 #include <detect_and_track/PoseEstimator.h>
 
 /**
- * @brief Default constructor.
- * @details Default constructor.
+ * @brief Builds an object dedicated to estimating the distance and position.
+ * @details This object implements different methods to estimate the position and distance of 
+ * objects detected within RGB-D images. It also allows the user to choose between different
+ * camera model which we detail bellow: \n
+ *  - "pin_hole" model, a simple model that does not account for lens deformations.
+ *  In most situations this model is sufficient. \n
+ *  - "plumb_blob" model, a more complicated model that adds lens deformation to
+ *  the Pin-Hole model. This model is slower, as to compute its inverse we need to
+ * estimate it through a short gradient descent. \n
+ * To estimate the distance and position we then provide 2 different modes: \n 
+ *  - "center": this mode takes the distance at the center of the bounding box
+ *  to estimate the distance and position of the objects. It's fast, but may be
+ *  wrong on thin objects like drones where the center of the bounding can be empty. \n
+ *  - "min_distance": this mode takes the filtered minimal distance to estimate the
+ *  distance to the center of the dected object. This is will create an offset, as
+ *  the distance measured is the smallest, and is sensitive to obstructions. However,
+ *  it always ensure that the measured distance is the one of the object. \n 
  * 
  */
-PoseEstimator::PoseEstimator() {
-}
+PoseEstimator::PoseEstimator() {}
 
 /**
- * @brief Prefered constructor.
- * @details Prefered constructor.
- * 
+ * @brief Builds an object dedicated to estimating the distance and position.
+ * @details This object implements different methods to estimate the position and distance of 
+ * objects detected within RGB-D images. It also allows the user to choose between different
+ * camera model which we detail bellow: \n
+ *  - "pin_hole" model, a simple model that does not account for lens deformations.
+ *  In most situations this model is sufficient. \n
+ *  - "plumb_blob" model, a more complicated model that adds lens deformation to
+ *  the Pin-Hole model. This model is slower, as to compute its inverse we need to
+ * estimate it through a short gradient descent. \n
+ * To estimate the distance and position we then provide 2 different modes: \n 
+ *  - "center": this mode takes the distance at the center of the bounding box
+ *  to estimate the distance and position of the objects. It's fast, but may be
+ *  wrong on thin objects like drones where the center of the bounding can be empty. \n
+ *  - "min_distance": this mode takes the filtered minimal distance to estimate the
+ *  distance to the center of the dected object. This is will create an offset, as
+ *  the distance measured is the smallest, and is sensitive to obstructions. However,
+ *  it always ensure that the measured distance is the one of the object. \n 
  * @param rejection_threshold The amount of points considered as outliers.
  * @param keep_threshold The amount of points to average from.
- * @param vertical_fov The vertical FOV of the camera.
- * @param horizontal_fov The horizontal FOV of the camera.
  * @param image_height The height of the images the class will process.
  * @param image_width The width of the images the class will process.
+ * @param camera_parameters The parameters of the camera used in both the pin-hole,
+ *  and plumb-blob model.The vector is organized as follows [fx,fy,cx,cy].
+ * @param K The lens deformation parameters, used in the plumb-blob model.
+ * A vector of size 5, organized as follows: [k1,k2,k3,k4,k5].
+ * @param deformation_model The deformation model used to project object from the image frame
+ *  to the local camera frame, pin_hole or plumb_blob. Note using plumb_blob with K = [0,0,0,0,0]
+ *  is equivalent to using a pin-hole model.
+ * @param position_mode The mode used to estimate distance to the object. Currently there are
+ *  2 different modes: min_distance, center.
  */
-PoseEstimator::PoseEstimator(float rejection_threshold, float keep_threshold, float vertical_fov, float horizontal_fov, int image_height, int image_width) {
+PoseEstimator::PoseEstimator(float rejection_threshold, float keep_threshold, int image_height, int image_width,
+                             std::vector<float>& camera_parameters, std::vector<float>& K,
+                             std::string distortion_model, std::string position_mode) {
   rejection_threshold_ = rejection_threshold;
   keep_threshold_ = keep_threshold;
-  vertical_fov_ = vertical_fov * M_PI / 180;
-  horizontal_fov_ = horizontal_fov * M_PI / 180;
   image_height_ = image_height;
   image_width_ = image_width;
+  
+  if (distortion_model == "pin_hole") {
+    distortion_model_ = 0;
+  } else if (distortion_model == "plumb_blob") {
+    distortion_model_ = 1;
+  } else {
+    distortion_model_ = 0;
+  }
+
+  if (position_mode == "pin_hole") {
+    position_mode_ = 0;
+  } else if (position_mode == "plumb_blob") {
+    position_mode_ = 1;
+  } else {
+    position_mode_ = 0;
+  }
+
+  distortion_model_ = distortion_model;
+  position_mode_ = position_mode;
 
   K_.resize(5,0.0);
-  fx_ = 607.7302246;
-  cx_ = 327.8651123;
-  fy_ = 606.1353759;
-  cy_ = 246.6830596;
+  K_ = K;
+  fx_ = camera_parameters[0];
+  fy_ = camera_parameters[1];
+  cx_ = camera_parameters[2];
+  cy_ = camera_parameters[3];
+  fx_inv_ = 1/fx_;
+  fy_inv_ = 1/fy_;
 }
 
 /**
@@ -132,14 +189,15 @@ void PoseEstimator::projectPixel2PointPinHole(const float& x, const float& y, co
 /**
  * @brief Computes the position of the pixel in the camera's local frame.
  * @details Computes the position of the pixel in the camera's local frame using a modified pin-hole model.
- * Instead of using z, we use the effective distance between the object and the point, hence, we must compute z using the following equations:
- * ix = x * fx + cx
- * iy = y * fy + cy
- * x = ix * z
- * y = iy * z
- * d = sqrt(x*x + y*y + z*z)
- * d = z*sqrt(ix*ix + iy*iy + 1)
- * z = d/sqrt(ix*ix + iy*iy + 1)
+ * Instead of using z, we use the effective distance between the object and the point, hence, we must compute
+ *  z using the following equations: \n
+ * ix = x * fx + cx \n
+ * iy = y * fy + cy \n
+ * x = ix * z \n
+ * y = iy * z \n
+ * d = sqrt(x*x + y*y + z*z) \n
+ * d = z*sqrt(ix*ix + iy*iy + 1) \n
+ * z = d/sqrt(ix*ix + iy*iy + 1) \n
  * 
  * @param dist The distance between the object and the camera.
  * @param pixel The reference to the pixel, format: (u,v) or (col,row).
@@ -157,14 +215,15 @@ void PoseEstimator::distancePixel2PointPinHole(const float& dist, const std::vec
 /**
  * @brief Computes the position of the pixel in the camera's local frame.
  * @details Computes the position of the pixel in the camera's local frame using a modified plumb-blob model.
- * Instead of using z, we use the effective distance between the object and the point, hence, we must compute z using the following equations:
- * ix = x * fx + cx
- * iy = y * fy + cy
- * x = ix * z
- * y = iy * z
- * d = sqrt(x*x + y*y + z*z)
- * d = z*sqrt(ix*ix + iy*iy + 1)
- * z = d/sqrt(ix*ix + iy*iy + 1)
+ * Instead of using z, we use the effective distance between the object and the point, hence, we must compute
+ *  z using the following equations: \n
+ * ix = x * fx + cx \n
+ * iy = y * fy + cy \n
+ * x = ix * z \n
+ * y = iy * z \n
+ * d = sqrt(x*x + y*y + z*z) \n
+ * d = z*sqrt(ix*ix + iy*iy + 1) \n
+ * z = d/sqrt(ix*ix + iy*iy + 1) \n
  * 
  * @param dist The distance between the object and the camera.
  * @param pixel The reference to the pixel, format: (u,v) or (col,row).
@@ -219,11 +278,11 @@ float PoseEstimator::getDistance(const cv::Mat& depth_image, const float& x_min,
       if (z != 0) {
         pixel[0] = row;
         pixel[1] = col;
-#ifdef BROWNCONRADY
-        deprojectPixel2PointBrownConrady(z, pixel, point);
-#else
-        deprojectPixel2PointPinHole(z, pixel, point);
-#endif
+        if (lens_distortion == 1) {
+          deprojectPixel2PointBrownConrady(z, pixel, point);
+        } else {
+          deprojectPixel2PointPinHole(z, pixel, point);
+        }
         d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
         distances[c] = d;
         c++;
@@ -248,7 +307,6 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
   std::vector<float> distance_vector;
   std::vector<std::vector<float>> distance_vectors;
   int rows, cols;
-
 
   // If the image does not exist, return -1 as distance.
   if (depth_image.empty()) {
@@ -361,11 +419,11 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
       }
       pixel[0] = bboxes[i][j].x_;
       pixel[1] = bboxes[i][j].y_;
-#ifdef BROWNCONRADY
-      distancePixel2PointBrownConrady(distances[i][j], pixel, point);
-#else
-      distancePixel2PointPinHole(distances[i][j], pixel, point);
-#endif
+      if (distortion_model_ == 1){
+        distancePixel2PointBrownConrady(distances[i][j], pixel, point);
+      } else {
+        distancePixel2PointPinHole(distances[i][j], pixel, point);
+      }
       point_vector.push_back(point);
     }
     point_vectors.push_back(point_vector);
@@ -391,11 +449,11 @@ std::vector<std::map<unsigned int, std::vector<float>>> PoseEstimator::estimateP
       float theta, phi;
       pixel[0] = element.second[0];
       pixel[1] = element.second[1];
-#ifdef BROWNCONRADY
-      distancePixel2PointBrownConrady(distances[i].at(element.first), pixel, point);
-#else
-      distancePixel2PointPinHole(distances[i].at(element.first), pixel, point);
-#endif
+      if (distortion_model_ == 1){
+        distancePixel2PointBrownConrady(distances[i][j], pixel, point);
+      } else {
+        distancePixel2PointPinHole(distances[i][j], pixel, point);
+      }
       point_maps[i].insert(std::pair(element.first, point));
     }
   }
