@@ -97,7 +97,7 @@ class ObjectDetector {
  * @brief An object that is used to detect objects in images.
  * @details An object that is used to detect objects in images.
  */
-/** class ObjectDetectorRotation : public ObjectDetector {
+class ObjectDetectorRotation : public ObjectDetector {
   private:
     void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&) override;
 
@@ -111,6 +111,6 @@ class ObjectDetector {
                    int,
                    int);
     ~ObjectDetectorRotation();
-}; **/
+};
 
 #endif

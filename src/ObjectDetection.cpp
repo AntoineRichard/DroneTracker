@@ -8,6 +8,8 @@
  * @brief Source code of the object detection
  * @details This file implements an object detection class using TensorRT.
  * This class is meant to be use with the Yolo v5 from ultralytics: https://github.com/ultralytics/yolov5
+ * @todo Enable the user to pick the buffer index for input and output.
+ * @todo Enable the user to switch between float32 and float16.
  */
 
 #include <fstream>
@@ -18,14 +20,24 @@
 #include <detect_and_track/ObjectDetection.h>
 
 /**
- * @brief Default constructor
+ * @brief Constructs an object detector object.
+ * @details Construct an object that can be used to detect objects inside images.
+ * This code was built to run the Yolov5 implementation from Ultralytics, but it should
+ * be able to run about any object detectors. The object detector uses TensorRT and CUDA to
+ * run the network, after that the raw detections are sorted and filtered using Non Maximum
+ * Suppression (NMS).
  * 
  */
 ObjectDetector::ObjectDetector() {
 }
 
 /**
- * @brief Prefered constructor
+ * @brief Constructs an object detector object.
+ * @details Construct an object that can be used to detect objects inside images.
+ * This code was built to run the Yolov5 implementation from Ultralytics, but it should
+ * be able to run about any object detectors. The object detector uses TensorRT and CUDA to
+ * run the network, after that the raw detections are sorted and filtered using Non Maximum
+ * Suppression (NMS).
  * 
  * @param path_to_engine The absolute path to the tensorRT engine; i.e the weights of the network after conversion to tensorRT.
  * @param nms_tresh Non Maximum Supression (NMS) threshold. 
@@ -97,7 +109,11 @@ size_t ObjectDetector::getSizeByDim(const nvinfer1::Dims& dims) {
 
 /**
  * @brief Initializes the object detector.
- * @details This method loads the model, allocates the memory on the GPU, and instantiate the TensorRT engine.
+ * @details This method loads the model, allocates the memory on the GPU, and instantiate
+ * the TensorRT engine. If the object detection model used is different from Yolov5 there may
+ * be some differences in the number of buffers (input and outputs of the network) as well
+ * as which buffer is used for what. In YoloV5 there are two buffers, buffer 0 is the input
+ * while buffer 1 is the output, however this depends on the network architecture and can change.
  * 
  */
 void ObjectDetector::prepareEngine() {
@@ -166,8 +182,9 @@ void ObjectDetector::prepareEngine() {
 
 /**
  * @brief Runs the network
- * @details This method applies the forward pass of the network. Before calling this method, the input buffer needs to be filled.
- * This can be achieved by using the method called sendBufferToGPU. To collect the result, the method called getBufferFromGPU must be called.
+ * @details This method applies the forward pass of the network. Before calling this method,
+ * the input buffer needs to be filled. This can be achieved by using the method called sendBufferToGPU.
+ * To collect the result, the method called getBufferFromGPU must be called.
  * 
  */
 void ObjectDetector::inferNetwork(){
@@ -178,8 +195,10 @@ void ObjectDetector::inferNetwork(){
 
 /**
  * @brief Sends a batch to the GPU.
- * @details Sends a batch, a set of images or a single image, to the GPU. Once this function has been called, the forward pass of the network can be applied.
- * See infereNetwork.
+ * @details Sends a batch, a set of images or a single image, to the GPU.
+ * Once this function has been called, the forward pass of the network can be applied.
+ * See infereNetwork. This function sends the data inside input_data_ inside buffer_[0]
+ * on the GPU. The index of the buffer may change depending on the architecture.
  * 
  */
 void ObjectDetector::sendBufferToGPU(){
@@ -191,7 +210,9 @@ void ObjectDetector::sendBufferToGPU(){
 
 /**
  * @brief Fetches data from the GPU.
- * @details Fetches the result of the network forward pass. This function should be called after infereNetwork.
+ * @details Fetches the result of the network forward pass. This function should be called
+ * after infereNetwork. This function fetches data from buffer_[1] on the GPU, and stores it
+ * inside output_data_. The index of the buffer may change depending on the architecture.
  * 
  */
 void ObjectDetector::getBufferFromGPU(){
@@ -203,8 +224,10 @@ void ObjectDetector::getBufferFromGPU(){
 
 /**
  * @brief Transforms the RGB image into a buffer.
- * @details Converts the uint8 RGB image into a float32 RGB image and stores it into a buffer that can be copied onto the GPU.
- * The copy of the buffer is done by sendBufferToGPU.
+ * @details Converts the uint8 RGB image into a float32 RGB image and stores it into a buffer
+ * that can be copied onto the GPU. The copy of the buffer is done by sendBufferToGPU.
+ * It is important to note that the image is converted to float32 whithin this function.
+ * To leverage float16 operation, it may be beneficial to cast to float16 instead.
  * 
  * @param image The reference to the RGB image to be preprocessed.
  */
@@ -226,6 +249,10 @@ void ObjectDetector::preprocessImage(cv::Mat& image){
 /**
  * @brief Applies the object detector.  
  * @details Applies the object detector on a given image and returns the bounding boxes.
+ * This function encapsulates all the preprocessing and data-handling between the CPU and the GPU.
+ * It first preprocesses the image, to send it to a local buffer, then, it is sent to the GPU,
+ * the inference is applied, the result is collected from the GPU and the Non Maximum Supression
+ * (NMS) algorithm is applied on top of it.
  * 
  * @param image The image to be processed by the network.
  * @param bboxes The reference to a vector of vectors of bounding boxes. 
@@ -265,7 +292,7 @@ void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>>
       // Get all the probabilities that this objects belong to a given class
       std::vector<float> probabilities(num_classes_);
       for (unsigned int j=0; i < num_classes_; j++){
-        // 4 : minx, miny, width, height, conf
+        // 5 : minx, miny, width, height, conf
         // i : number of objects
         // j : number of classes
         probabilities[j] = output_data_.get()[4 + i + j]; 
@@ -273,7 +300,62 @@ void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>>
       // Take the maximum
       class_id = std::distance(probabilities.begin(), std::max_element(probabilities.begin(), probabilities.end()));
       // Save to bounding box
-      bboxes[class_id].push_back(BoundingBox(output_data_.get() + i));
+      bboxes[class_id].push_back(BoundingBox(class_id, output_data_.get() + i));
+    }
+  }
+  // Non-maximum supression
+  for (int c = 0; c < num_classes_; ++c) {
+    std::sort(bboxes[c].begin(), bboxes[c].end(),
+              BoundingBox::sortComparisonFunction);
+    const size_t bboxes_size = bboxes[c].size();
+    size_t valid_count = 0;
+
+    for (size_t i = 0; i < bboxes_size && valid_count < max_output_bbox_count_;
+         ++i) {
+      if (!bboxes[c][i].valid_) {
+        continue;
+      }
+      for (size_t j = i + 1; j < bboxes_size; ++j) {
+        bboxes[c][i].compareWith(bboxes[c][j], nms_tresh_);
+      }
+      ++valid_count;
+    }
+  }
+}
+
+/**
+ * @brief Filters the bounding boxes generated by the network.
+ * @details Applies Non Maximum Supression (NMS) to filter the bounding boxes generated by the network.
+ * First step it checks if the bounding boxes have a confidence superior to a given threshold.
+ * Second, it applies the non-maximum supression to remove deuplicate detections and other outliers.
+ * 
+ * @param bboxes The reference to a vector of vectors of bounding boxes.
+ */
+void ObjectDetectorRotation::nonMaximumSuppression(std::vector<std::vector<RotatedBoundingBox>> &bboxes) {
+  bboxes.resize(num_classes_);
+  int class_id;
+  float conf; 
+
+  for (int c = 0; c < num_classes_; ++c) {
+    bboxes[c].reserve(output_size_);
+  }
+  // Rotated bounding box is cx, cy, width, height, cos(theta), sin(theta), conf, class1, class2, ...
+  for (int i = 0; i < output_size_; i += (num_classes_ + 7)) {
+    conf = output_data_.get()[i + 4];
+    if (conf > conf_tresh_) {
+      assert(conf <= 1.0f);
+      // Get all the probabilities that this objects belong to a given class
+      std::vector<float> probabilities(num_classes_);
+      for (unsigned int j=0; i < num_classes_; j++){
+        // 7 : cx, cy, width, height, cos(theta), sin(theta), conf
+        // i : number of objects
+        // j : number of classes
+        probabilities[j] = output_data_.get()[6 + i + j]; 
+      }
+      // Take the maximum
+      class_id = std::distance(probabilities.begin(), std::max_element(probabilities.begin(), probabilities.end()));
+      // Save to bounding box
+      bboxes[class_id].push_back(BoundingBox(class_id, output_data_.get() + i));
     }
   }
   // Non-maximum supression
