@@ -64,12 +64,9 @@ class Detect {
 
 class DetectAndLocate : public Detect {
   private:
-    // Image parameters
-    cv::Mat depth_image_;
-
     //Profiling variables
 #ifdef PROFILE
-    std::chrono::time_point start_distance;
+    std::chrono::time_point start_distance_;
     std::chrono::time_point end_distance_;
     std::chrono::time_point start_position_;
     std::chrono::time_point end_position_;
@@ -106,6 +103,12 @@ class DetectAndTrack2D : public Detect {
     float max_bbox_width_;
     float max_bbox_height_;
 
+    //Profiling variables
+#ifdef PROFILE
+    std::chrono::time_point start_tracking_;
+    std::chrono::time_point end_tracking_;
+#endif
+
     // dt update for Kalman 
     float dt_;
 
@@ -122,7 +125,9 @@ class DetectAndTrack2D : public Detect {
     ~DetectAndTrack2D();
 
     void track(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&,
-               std::vector<std::map<unsigned int, std::vector<float>>>&);
+              std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void generateObjectTrackingImage(cv::Mat&,
+              const std::vector<std::map<unsigned int, std::vector<float>>>);
     void printProfiling();
 };
 
