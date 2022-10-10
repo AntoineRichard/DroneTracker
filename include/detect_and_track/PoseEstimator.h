@@ -56,7 +56,7 @@ class PoseEstimator {
 
   public:
     PoseEstimator();
-    PoseEstimator(float, float, float, float, int, int);
+    PoseEstimator(float, float, int, int, std::vector<float>, std::vector<float>, std::string, std::string);
     std::vector<std::vector<float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
     std::vector<std::map<unsigned int, float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>&);
     std::vector<std::vector<std::vector<float>>> estimatePosition(const std::vector<std::vector<float>>& , const std::vector<std::vector<BoundingBox>>&);
@@ -67,7 +67,7 @@ class PoseEstimator {
     float getDistance(const cv::Mat&, const float&, const float&, const float&, const float&);
     void distancePixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
     void projectPixel2PointPinHole(const float&, const float&, const float&, float&, float&);
-    void updateCameraParameters(float, float, float, float, std::vector<double>);
+    void updateCameraParameters(const std::vector<float>&, const std::vector<float>&);
 };
 
 #endif
