@@ -1,3 +1,18 @@
+/**
+ * @file ObjectDetection.cpp
+ * @author antoine.richard@uni.lu
+ * @version 0.1
+ * @date 2022-09-21
+ * 
+ * @copyright University of Luxembourg | SnT | SpaceR 2022--2022
+ * @brief Header of the utilitary classes
+ * @details This file implements various utilitary classes, such as bounding-box definition,
+ * csv writer, or color maps.
+ */
+
+#ifndef UTILS_H
+#define UTILS_H
+
 #pragma once
 
 #include <opencv2/opencv.hpp>
@@ -40,121 +55,50 @@ class csvWriter {
         unsigned int max_buffer_size_;
         std::vector<std::vector<float>> buffer_;
 
-        void makeHeader(std::vector<std::string> header) {
-            openFile();
-            for (unsigned int row=0; row < header.size(); row ++) {
-                ofs_ << header[row] << separator_;
-            }
-            ofs_ << endline_;
-            closeFile();
-        }
-
-        bool createFile() {
-            ofs_.open(filename_, std::ofstream::out | std::ofstream::trunc); 
-            closeFile();
-        }
-
-        void writeToFile() {
-            for (unsigned int line=0; line < buffer_.size(); line ++) {
-                for (unsigned int row=0; row < buffer_[line].size(); row ++) {
-                    ofs_ << std::to_string(buffer_[line][row]) << separator_;
-                }
-                ofs_ << endline_;
-            }
-            buffer_.clear();
-        }
-
-        void openFile() {
-            ofs_.open(filename_, std::ofstream::out | std::ofstream::app);
-        }
-        void closeFile() {
-            ofs_.close();
-        }
+        void makeHeader(std::vector<std::string>);
+        bool createFile();
+        void writeToFile();
+        void openFile();
+        void closeFile();
     public:
-        csvWriter(std::string&  filename, std::string& separator, std::string& endline, std::vector<std::string>& header, unsigned int& max_buffer_size) : ofs_() {
-            ofs_.exceptions(std::ios::failbit | std::ios::badbit);
-            separator_ = separator;
-            endline_ = endline;
-            filename_ = filename;
-            createFile();
-            makeHeader(header);
-        }
+        csvWriter(std::string&, std::string&, std::string&, std::vector<std::string>&, unsigned int&);
+        ~csvWriter();
 
-        ~csvWriter() {
-            flush();
-        }
+        void flush();
+        bool addToBuffer(std::vector<float> data);
+};
 
-        void flush() {
-            openFile();
-            writeToFile();
-            closeFile();
-        }
+class RotatedBoundingBox {
+    public:
+        int class_id_;
+        float confidence_;
+        float x_; // center x
+        float y_; // center y
+        float w_; // width
+        float h_; // height
+        float cos_;
+        float sin_;
+        float theta_;
+        float area_;
 
-        bool addToBuffer(std::vector<float> data) {
-            buffer_.push_back(data);
-            if (buffer_.size() >= max_buffer_size_) {
-                flush();
-            }
-        }
+        float x1_;
+        float x2_;
+        float x3_;
+        float x4_;
+        float y1_;
+        float y2_;
+        float y3_;
+        float y4_;
+        
+        bool valid_ = true;
+        BoundingBox (float*, int&): 
+        static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
+        float calculateIOU (const BoundingBox&);
+        void compareWith(BoundingBox&, const float);
 };
 
 class BoundingBox {
     public:
-        BoundingBox (float* data): 
-            class_id_((int) (data[6]>data[5])),
-            confidence_(data[4]),
-            x_(data[0]),
-            y_(data[1]),
-            w_(data[2]),
-            h_(data[3]),
-            x_min_(data[0] - data[2]/2),
-            x_max_(data[0] + data[2]/2),
-            y_min_(data[1] - data[3]/2),
-            y_max_(data[1] + data[3]/2),
-            area_(data[2] * data[3])
-            {}
-
-        static bool sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
-            return bbox_0.confidence_ > bbox_1.confidence_;
-        }
-
-        float calculateIOU (const BoundingBox& bbox) {
-            const float x_min_new = std::max(x_min_, bbox.x_min_);
-            const float x_max_new = std::min(x_max_, bbox.x_max_);
-            const float w_new = x_max_new - x_min_new;
-            if (w_new <= 0.0f) {
-                return 0.0f;
-            }
-
-            const float y_min_new = std::max(y_min_, bbox.y_min_);
-            const float y_max_new = std::min(y_max_, bbox.y_max_);
-            const float h_new = y_max_new - y_min_new;
-            if (h_new <= 0.0f) {
-                return 0.0f;
-            }
-
-            return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
-        } 
-
-        void compareWith(BoundingBox& bbox, const float thred_IOU) {
-            if (bbox.valid_ == false || class_id_ != bbox.class_id_) {
-                return;
-            }
-
-            if (calculateIOU(bbox) >= thred_IOU) {
-                // ROS_INFO(
-                //     "bbox0: tx = %.4f, ty = %.4f, tw = %.4f, th = %.4f", 
-                //     x_, y_, w_, h_
-                // );
-                // ROS_INFO(
-                //     "bbox1: tx = %.4f, ty = %.4f, tw = %.4f, th = %.4f", 
-                //     bbox.x_, bbox.y_, bbox.w_, bbox.h_
-                // );
-                // ROS_INFO("IOU = %.4f\n", calculateIOU(bbox));
-                bbox.valid_ = false;
-            }
-        }
-
         int class_id_;
         float confidence_;
         float x_; // center x
@@ -166,6 +110,13 @@ class BoundingBox {
         float y_min_;
         float y_max_;
         float area_;
-        
         bool valid_ = true;
+
+        BoundingBox (float* data);
+        static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
+        float calculateIOU (const BoundingBox&);
+        void compareWith(BoundingBox&, const float);
+
 };
+
+#endif
