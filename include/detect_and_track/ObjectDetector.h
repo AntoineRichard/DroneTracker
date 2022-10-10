@@ -14,12 +14,14 @@
 #define ObjectDetector_H
 
 #include <string>
+#include <stdio.h>
 #include <vector>
 #include <map>
 
 #include <detect_and_track/ObjectDetection.h>
 #include <detect_and_track/PoseEstimator.h>
 #include <detect_and_track/Tracker.h>
+#include <detect_and_track/utils.h>
 
 #include <opencv2/opencv.hpp>
 
@@ -33,6 +35,14 @@ class Detect {
     int padding_cols_;
     cv::Mat padded_image_;
 
+    //Profiling variables
+#ifdef PROFILE
+    std::chrono::time_point start_image_;
+    std::chrono::time_point end_image_;
+    std::chrono::time_point start_detection_;
+    std::chrono::time_point end_detection_;
+#endif
+
     // Object detector parameters
     int num_classes_;
     std::vector<std::string> class_map_;
@@ -40,13 +50,16 @@ class Detect {
     ObjectDetector* OD_;
 
   public:
-    Detect(std::string, int, int, int, int, float, float, int, bool);
+    Detect();
+    Detect(std::string, int, int, int, int, float, float, int, std::vector<std::string>);
     ~Detect();
 
-    void peformDetection(const cv::Mat&, std::vector<std::vector<BoundingBox>>&);
+    void detectObjects(const cv::Mat&, std::vector<std::vector<BoundingBox>>&);
     void generateDetectionImage(cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
     void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
     void padImage(const cv::Mat&);
+    void apply(std::string&, std::string, bool);
+    void printProfiling();
 };
 
 class DetectAndLocate : public Detect {
@@ -54,17 +67,26 @@ class DetectAndLocate : public Detect {
     // Image parameters
     cv::Mat depth_image_;
 
+    //Profiling variables
+#ifdef PROFILE
+    std::chrono::time_point start_distance;
+    std::chrono::time_point end_distance_;
+    std::chrono::time_point start_position_;
+    std::chrono::time_point end_position_;
+#endif
+
     PoseEstimator* PE_;
 
   public:
-    DetectAndLocate(std::string, int, int, int, int, float, float, int, bool,
-                    std::string, float, float, std::vector<float>,
-                    std::vector<float>);
+    DetectAndLocate(std::string, int, int, int, int, float, float, int, std::vector<std::string>,
+                    float, float, std::vector<float>, std::vector<float>, std::string,
+                    std::string);
     ~DetectAndLocate();
 
     void locate(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&,
-                std::vector<std::vector<float>>&);
-    void updateCameraInfo(const std::vector<float>);
+                std::vector<std::vector<float>>&, std::vector<std::vector<std::vector<float>>>&);
+    void updateCameraInfo(const std::vector<float>&, const std::vector<float>&);
+    void apply(std::string, std::string, bool);
 };
 
 class DetectAndTrack2D : public Detect {
@@ -93,7 +115,7 @@ class DetectAndTrack2D : public Detect {
                      const std::vector<std::vector<BoundingBox>>&);
 
   public:
-    DetectAndTrack2D(std::string, int, int, int, int, float, float, int, bool,
+    DetectAndTrack2D(std::string, int, int, int, int, float, float, int, std::vector<std::string>,
                      std::vector<float>, std::vector<float>, float, float,
                      float, float, bool, bool, int, float, float, float,
                      float);
@@ -101,6 +123,7 @@ class DetectAndTrack2D : public Detect {
 
     void track(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&,
                std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void printProfiling();
 };
 
 class DetectTrackAndLocate2D : public DetectAndTrack2D {
