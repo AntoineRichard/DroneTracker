@@ -74,9 +74,9 @@ typedef struct DetectionParameters{
  * 
  */
 typedef struct NMSParameters{
-  float nms_thresh;
-  float conf_thresh;
-  int max_output_bbox_count;
+  float nms_thresh; // Non Maximum Supression (NMS) threshold. 
+  float conf_thresh; // Confidence threshold.
+  int max_output_bbox_count; // The maximum amount of bounding boxes that can be detected.
 } NMSParameters;
 
 /**
@@ -84,9 +84,9 @@ typedef struct NMSParameters{
  * 
  */
 typedef struct CameraParameters{
-  std::vector<float> camera_parameters;
-  std::vector<float> lens_distortion;
-  std::string distortion_model;
+  std::vector<float> camera_parameters; // The parameters of the pinhole model organized as follows [cx,cy,fx,fy]
+  std::vector<float> lens_distortion; // The parameters of the plumb-blob model organized as follows [k1,k2,k3,k4,k5]
+  std::string distortion_model; // The type of distortion model: pin-hole or plumb-blob.
 } CameraParameters;
 
 /**
@@ -94,9 +94,9 @@ typedef struct CameraParameters{
  * 
  */
 typedef struct LocalizationParameters{
-  float reject_thresh;
-  float keep_thresh;
-  std::string mode;
+  float reject_thresh; // The amount of points that are being rejected in min_distance mode.
+  float keep_thresh; // The amount of points that are used to compute the distance to the object in min_distance mode. 
+  std::string mode; // The localization mode: min_distance or center.
 } LocalizationParameters;
 
 /**
@@ -104,11 +104,10 @@ typedef struct LocalizationParameters{
  * 
  */
 typedef struct KalmanParameters{
-  std::vector<float> Q;
-  std::vector<float> R;
-  bool use_dim;
-  bool use_vel;
-  float dt;
+  std::vector<float> Q; // The process noise of the Kalman filter.
+  std::vector<float> R; // The measurement noise of the Kalman filter.
+  bool use_dim; // Sets if the filter should use the height and width inside the correction step.
+  bool use_vel; // Sets if the filter should use the velocity inside the correction step.
 } KalmanParameters;
 
 /**
@@ -116,11 +115,12 @@ typedef struct KalmanParameters{
  * 
  */
 typedef struct TrackingParameters{
-  float distance_thresh;
+  float distance_thresh; 
   float center_thresh;
   float body_ratio;
   float area_thresh;
   int max_frames_to_skip;
+  float dt; // The delta of time in between two timesteps.
 } TrackingParameters;
 
 /**
@@ -156,7 +156,7 @@ class csvWriter {
         bool addToBuffer(std::vector<float> data);
 };
 
-class RotatedBoundingBox {
+/*class RotatedBoundingBox {
     public:
         int class_id_;
         float confidence_;
@@ -179,11 +179,9 @@ class RotatedBoundingBox {
         float y4_;
         
         bool valid_ = true;
-        BoundingBox (float*, int&): 
-        static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
-        float calculateIOU (const BoundingBox&);
-        void compareWith(BoundingBox&, const float);
-};
+        RotatedBoundingBox (float*, int&); 
+};*/
+
 
 class BoundingBox {
     public:
@@ -200,11 +198,14 @@ class BoundingBox {
         float area_;
         bool valid_ = true;
 
-        BoundingBox (float* data);
-        static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
+        BoundingBox (float*, int&);
         float calculateIOU (const BoundingBox&);
         void compareWith(BoundingBox&, const float);
-
 };
+        
+static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
+//static bool sortComparisonFunction(const RotatedBoundingBox&, const RotatedBoundingBox&);
+//float calculateIOU (const RotatedBoundingBox&);
+//void compareWith(RotatedBoundingBox&, const float);
 
 #endif

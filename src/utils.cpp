@@ -59,7 +59,7 @@ bool csvWriter::addToBuffer(std::vector<float> data) {
     }
 }
 
-RotatedBounding::BoxBoundingBox(float* data, int& class_id) {
+/*RotatedBounding::RotatedBoundingBox(float* data, int& class_id) {
     class_id_ = class_id;
     confidence_ = data[6]; 
     x_ = data[0];
@@ -102,11 +102,11 @@ RotatedBounding::BoxBoundingBox(float* data, int& class_id) {
     y_min_ = std::max(y1,y2);
     }
 
-static bool RotatedBounding::sortComparisonFunction(const RotatedBoundingBox& bbox_0, const RotatedBoundingBox& bbox_1) {
+static bool sortComparisonFunction(const RotatedBoundingBox& bbox_0, const RotatedBoundingBox& bbox_1) {
     return bbox_0.confidence_ > bbox_1.confidence_;
 }
 
-float RotatedBounding::calculateIOU(const RotatedBoundingBox& bbox) {
+float calculateIOU(const RotatedBoundingBox& bbox) {
     const float x_min_new = std::max(x_min_, bbox.x_min_);
     const float x_max_new = std::min(x_max_, bbox.x_max_);
     const float w_new = x_max_new - x_min_new;
@@ -120,7 +120,7 @@ float RotatedBounding::calculateIOU(const RotatedBoundingBox& bbox) {
         return 0.0f;
     }
 
-    /*const float cos = std::cos(-theta);
+    const float cos = std::cos(-theta);
     const float sin = std::sin(-theta);
     const float dx = bbox.x_ - x_;
     const float dy = bbox.y_ - y_;
@@ -133,12 +133,12 @@ float RotatedBounding::calculateIOU(const RotatedBoundingBox& bbox) {
     x3l = bbox.x3l_ * cos - bbox.y3l_ * sin + dx;
     y3l = bbox.x3l_ * sin + bbox.y3l_ * cos + dy;
     x4l = bbox.x4l_ * cos - bbox.y4l_ * sin + dx;
-    y4l = bbox.x4l_ * sin + bbox.y4l_ * cos + dy;*/
+    y4l = bbox.x4l_ * sin + bbox.y4l_ * cos + dy;
 
     return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
 } 
 
-void RotatedBounding::compareWith(RotatedBoundingBox& bbox, const float thred_IOU) {
+void compareWith(RotatedBoundingBox& bbox, const float thred_IOU) {
     if (bbox.valid_ == false || class_id_ != bbox.class_id_) {
         return;
     }
@@ -147,7 +147,7 @@ void RotatedBounding::compareWith(RotatedBoundingBox& bbox, const float thred_IO
         bbox.valid_ = false;
     }
 }
-
+*/
 BoundingBox::BoundingBox(float* data, int& class_id) {
     class_id_ =  class_id,
     confidence_ = data[4];
@@ -162,7 +162,7 @@ BoundingBox::BoundingBox(float* data, int& class_id) {
     area_ = data[2] * data[3];
 }
 
-static bool BoundingBox::sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
+static bool sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
     return bbox_0.confidence_ > bbox_1.confidence_;
 }
 
@@ -181,7 +181,8 @@ float BoundingBox::calculateIOU(const BoundingBox& bbox) {
         return 0.0f;
     }
 
-    return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
+  distortion_model_ = distortion_model;
+  position_mode_ = position_mode;    return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
 } 
 
 void BoundingBox::compareWith(BoundingBox& bbox, const float thred_IOU) {
