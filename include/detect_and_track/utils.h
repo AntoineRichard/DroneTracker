@@ -19,6 +19,10 @@
 #include <iostream>
 #include <fstream>
 
+/**
+ * @brief A color palette.
+ * 
+ */
 static const std::vector<cv::Scalar> ColorPalette{
       cv::Scalar(0, 64, 255),
       cv::Scalar(64, 255, 0),
@@ -45,6 +49,90 @@ static const std::vector<cv::Scalar> ColorPalette{
       cv::Scalar(255, 0, 0),
       cv::Scalar(0, 0, 255)
   };
+
+/**
+ * @brief A structure that stores basic parameters
+ */
+typedef struct GlobalParameters{
+  int image_height; // The height of the image in pixels.
+  int image_width; // The width of the image in pixels.
+} GlobalParameters;
+
+/**
+ * @brief A structure that stores all the parameters related network.
+ * 
+ */
+typedef struct DetectionParameters{
+  std::string engine_path; // The path to the TensorRT engine file.
+  int num_buffers; // The number of buffers (inputs/outputs) the network has. In most cases it should be 2.
+  int num_classes; // The number of classes the network knows.
+  std::vector<std::string> class_map; // An ordered vector containing the name of the classes.
+} DetectionParameters;
+
+/**
+ * @brief A structure that stores all the parameters related to Non-Maximum-Supression.
+ * 
+ */
+typedef struct NMSParameters{
+  float nms_thresh;
+  float conf_thresh;
+  int max_output_bbox_count;
+} NMSParameters;
+
+/**
+ * @brief A structure that stores all the parameters related to the camera.
+ * 
+ */
+typedef struct CameraParameters{
+  std::vector<float> camera_parameters;
+  std::vector<float> lens_distortion;
+  std::string distortion_model;
+} CameraParameters;
+
+/**
+ * @brief A structure that stores all the parameters related to the position estimation algorithm.
+ * 
+ */
+typedef struct LocalizationParameters{
+  float reject_thresh;
+  float keep_thresh;
+  std::string mode;
+} LocalizationParameters;
+
+/**
+ * @brief A structure that stores all the parameters related to the Kalman filters.
+ * 
+ */
+typedef struct KalmanParameters{
+  std::vector<float> Q;
+  std::vector<float> R;
+  bool use_dim;
+  bool use_vel;
+  float dt;
+} KalmanParameters;
+
+/**
+ * @brief A structure that stores all the parameters related to the tracking algorithm.
+ * 
+ */
+typedef struct TrackingParameters{
+  float distance_thresh;
+  float center_thresh;
+  float body_ratio;
+  float area_thresh;
+  int max_frames_to_skip;
+} TrackingParameters;
+
+/**
+ * @brief A structure that stores all the parameters used to reject bounding boxes before tracking.
+ * 
+ */
+typedef struct BBoxRejectionParameters{
+  int min_bbox_height;
+  int max_bbox_height;
+  int min_bbox_width;
+  int max_bbox_width;
+} BBoxRejectionParameters;
 
 class csvWriter {
     private:
