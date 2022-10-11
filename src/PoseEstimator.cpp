@@ -89,9 +89,6 @@ PoseEstimator::PoseEstimator(float rejection_threshold, float keep_threshold, in
     position_mode_ = 0;
   }
 
-  distortion_model_ = distortion_model;
-  position_mode_ = position_mode;
-
   K_.resize(5,0.0);
   K_ = K;
   fx_ = camera_parameters[0];
@@ -333,7 +330,7 @@ float PoseEstimator::getDistance(const cv::Mat& depth_image, const float& x_min,
       if (z != 0) {
         pixel[0] = row;
         pixel[1] = col;
-        if (lens_distortion == 1) {
+        if (distortion_model_ == 1) {
           deprojectPixel2PointBrownConrady(z, pixel, point);
         } else {
           deprojectPixel2PointPinHole(z, pixel, point);
@@ -502,12 +499,13 @@ std::vector<std::map<unsigned int, std::vector<float>>> PoseEstimator::estimateP
   for (unsigned int i=0; i < tracked_states.size(); i++) {
     for (auto & element : tracked_states[i]) {
       float theta, phi;
+      printf("%d",element.first);
       pixel[0] = element.second[0];
       pixel[1] = element.second[1];
       if (distortion_model_ == 1){
-        distancePixel2PointBrownConrady(distances[i][j], pixel, point);
+        distancePixel2PointBrownConrady(distances[i][element.first], pixel, point);
       } else {
-        distancePixel2PointPinHole(distances[i][j], pixel, point);
+        distancePixel2PointPinHole(distances[i][element.first], pixel, point);
       }
       point_maps[i].insert(std::pair(element.first, point));
     }
