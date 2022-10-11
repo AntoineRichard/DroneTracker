@@ -57,6 +57,7 @@ class PoseEstimator {
   public:
     PoseEstimator();
     PoseEstimator(float, float, int, int, std::vector<float>, std::vector<float>, std::string, std::string);
+    PoseEstimator(GlobalParameters&, LocalizationParameters&, CameraParameters&);
     std::vector<std::vector<float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
     std::vector<std::map<unsigned int, float>> extractDistanceFromDepth(const cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>&);
     std::vector<std::vector<std::vector<float>>> estimatePosition(const std::vector<std::vector<float>>& , const std::vector<std::vector<BoundingBox>>&);
