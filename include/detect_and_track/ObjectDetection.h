@@ -82,13 +82,8 @@ class ObjectDetector {
 
   public:
     ObjectDetector();
-    ObjectDetector(std::string,
-                   float,
-                   float,
-                   size_t,
-                   int,
-                   int,
-                   int);
+    ObjectDetector(std::string, float, float, size_t, int, int, int);
+    ObjectDetector(int, DetectionParameters&, NMSParameters&);
     ~ObjectDetector();
     void detectObjects(cv::Mat, std::vector<std::vector<BoundingBox>>&);
 };
@@ -103,13 +98,7 @@ class ObjectDetectorRotation : public ObjectDetector {
 
   public:
     ObjectDetectorRotation();
-    ObjectDetectorRotation(std::string,
-                   float,
-                   float,
-                   size_t,
-                   int,
-                   int,
-                   int);
+    ObjectDetectorRotation(std::string, float, float, size_t, int, int, int);
     ~ObjectDetectorRotation();
 };
 

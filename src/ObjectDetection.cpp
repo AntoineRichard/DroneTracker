@@ -49,13 +49,8 @@ ObjectDetector::ObjectDetector() {
  * @param image_size The size of the image the network will process. The network processes square images (NxN), hence, only one value is required, the largest.
  * 
  */
-ObjectDetector::ObjectDetector(std::string path_to_engine,
-                   float nms_tresh,
-                   float conf_tresh,
-                   size_t max_output_bbox_count,
-                   int buffer_size,
-                   int image_size,
-                   int num_classes) {
+ObjectDetector::ObjectDetector(std::string path_to_engine, float nms_tresh, float conf_tresh,
+                   size_t max_output_bbox_count, int buffer_size, int image_size, int num_classes) {
   path_to_engine_ = path_to_engine;
   nms_tresh_ = nms_tresh;
   conf_tresh_ = conf_tresh;
@@ -64,6 +59,36 @@ ObjectDetector::ObjectDetector(std::string path_to_engine,
   image_size_ = image_size;
   num_classes_ = num_classes;
 
+  buffers_.resize(buffer_size_);
+
+  prepareEngine();
+
+  input_data_ = std::shared_ptr<float[]>(new float[input_size_]);
+  output_data_ = std::shared_ptr<float[]>(new float[output_size_]);
+}
+
+/**
+ * @brief Constructs an object detector object.
+ * @details Construct an object that can be used to detect objects inside images.
+ * This code was built to run the Yolov5 implementation from Ultralytics, but it should
+ * be able to run about any object detectors. The object detector uses TensorRT and CUDA to
+ * run the network, after that the raw detections are sorted and filtered using Non Maximum
+ * Suppression (NMS).
+ * 
+ * @param image_size The size of the image the network will process. The network processes square images (NxN), hence, only one value is required, the largest. 
+ * @param det_p A structure that holds all the parameters related to the network.
+ * @param nms_p A structure that holds all the parameters related to the Non-Maximum-Supression. 
+ * 
+ */
+ObjectDetector::ObjectDetector(image_size, DetectionParameters& det_p, NMSParameters&, nms_p) {
+  path_to_engine_ = det_p.path_to_engine;
+  nms_tresh_ = nms_p.nms_tresh;
+  conf_tresh_ = nms_p.conf_tresh;
+  max_output_bbox_count_ = nms_p.max_output_bbox_count;
+  buffer_size_ = det_p.num_buffers;
+  image_size_ = image_size;
+  num_classes_ = det_p.num_classes;
+  det_p.
   buffers_.resize(buffer_size_);
 
   prepareEngine();
