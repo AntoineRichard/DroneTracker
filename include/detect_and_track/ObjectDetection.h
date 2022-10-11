@@ -78,7 +78,7 @@ class ObjectDetector {
     void sendBufferToGPU();
     void getBufferFromGPU();
     void inferNetwork();
-    virtual void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&);
+    void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&);
 
   public:
     ObjectDetector();
@@ -92,14 +92,14 @@ class ObjectDetector {
  * @brief An object that is used to detect objects in images.
  * @details An object that is used to detect objects in images.
  */
-class ObjectDetectorRotation : public ObjectDetector {
+/*class ObjectDetectorRotation : public ObjectDetector {
   private:
-    void nonMaximumSuppression(std::vector<std::vector<BoundingBox>>&) override;
+    void nonMaximumSuppression(std::vector<std::vector<RotatedBoundingBox>>&);
 
   public:
     ObjectDetectorRotation();
     ObjectDetectorRotation(std::string, float, float, size_t, int, int, int);
     ~ObjectDetectorRotation();
-};
+};*/
 
 #endif

@@ -80,15 +80,14 @@ ObjectDetector::ObjectDetector(std::string path_to_engine, float nms_tresh, floa
  * @param nms_p A structure that holds all the parameters related to the Non-Maximum-Supression. 
  * 
  */
-ObjectDetector::ObjectDetector(image_size, DetectionParameters& det_p, NMSParameters&, nms_p) {
-  path_to_engine_ = det_p.path_to_engine;
-  nms_tresh_ = nms_p.nms_tresh;
-  conf_tresh_ = nms_p.conf_tresh;
+ObjectDetector::ObjectDetector(int image_size, DetectionParameters& det_p, NMSParameters& nms_p) {
+  path_to_engine_ = det_p.engine_path;
+  nms_tresh_ = nms_p.nms_thresh;
+  conf_tresh_ = nms_p.conf_thresh;
   max_output_bbox_count_ = nms_p.max_output_bbox_count;
   buffer_size_ = det_p.num_buffers;
   image_size_ = image_size;
   num_classes_ = det_p.num_classes;
-  det_p.
   buffers_.resize(buffer_size_);
 
   prepareEngine();
@@ -325,13 +324,12 @@ void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>>
       // Take the maximum
       class_id = std::distance(probabilities.begin(), std::max_element(probabilities.begin(), probabilities.end()));
       // Save to bounding box
-      bboxes[class_id].push_back(BoundingBox(class_id, output_data_.get() + i));
+      bboxes[class_id].push_back(BoundingBox(output_data_.get() + i, class_id));
     }
   }
   // Non-maximum supression
   for (int c = 0; c < num_classes_; ++c) {
-    std::sort(bboxes[c].begin(), bboxes[c].end(),
-              BoundingBox::sortComparisonFunction);
+    std::sort(bboxes[c].begin(), bboxes[c].end(), sortComparisonFunction);
     const size_t bboxes_size = bboxes[c].size();
     size_t valid_count = 0;
 
@@ -356,7 +354,7 @@ void ObjectDetector::nonMaximumSuppression(std::vector<std::vector<BoundingBox>>
  * 
  * @param bboxes The reference to a vector of vectors of bounding boxes.
  */
-void ObjectDetectorRotation::nonMaximumSuppression(std::vector<std::vector<RotatedBoundingBox>> &bboxes) {
+/*void ObjectDetectorRotation::nonMaximumSuppression(std::vector<std::vector<RotatedBoundingBox>> &bboxes) {
   bboxes.resize(num_classes_);
   int class_id;
   float conf; 
@@ -380,13 +378,12 @@ void ObjectDetectorRotation::nonMaximumSuppression(std::vector<std::vector<Rotat
       // Take the maximum
       class_id = std::distance(probabilities.begin(), std::max_element(probabilities.begin(), probabilities.end()));
       // Save to bounding box
-      bboxes[class_id].push_back(BoundingBox(class_id, output_data_.get() + i));
+      bboxes[class_id].push_back(RotatedBoundingBox(output_data_.get() + i, class_id));
     }
   }
   // Non-maximum supression
   for (int c = 0; c < num_classes_; ++c) {
-    std::sort(bboxes[c].begin(), bboxes[c].end(),
-              BoundingBox::sortComparisonFunction);
+    std::sort(bboxes[c].begin(), bboxes[c].end(), sortComparisonFunction);
     const size_t bboxes_size = bboxes[c].size();
     size_t valid_count = 0;
 
@@ -401,4 +398,4 @@ void ObjectDetectorRotation::nonMaximumSuppression(std::vector<std::vector<Rotat
       ++valid_count;
     }
   }
-}
+}*/
