@@ -1,4 +1,4 @@
-#include <detect_and_track/ObjectDetector.h>
+#include <detect_and_track/DetectionUtils.h>
 
 Detect::Detect() : OD_() {}
 

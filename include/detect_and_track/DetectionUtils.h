@@ -10,8 +10,8 @@
  * This class is meant to be use with the Yolo v5 from ultralytics: https://github.com/ultralytics/yolov5
  */
 
-#ifndef ObjectDetector_H
-#define ObjectDetector_H
+#ifndef DetectionUtils_H
+#define DetectionUtils_H
 
 #include <string>
 #include <stdio.h>
