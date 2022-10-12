@@ -144,7 +144,7 @@ class csvWriter {
         std::vector<std::vector<float>> buffer_;
 
         void makeHeader(std::vector<std::string>);
-        bool createFile();
+        void createFile();
         void writeToFile();
         void openFile();
         void closeFile();
@@ -153,7 +153,7 @@ class csvWriter {
         ~csvWriter();
 
         void flush();
-        bool addToBuffer(std::vector<float> data);
+        void addToBuffer(std::vector<float> data);
 };
 
 /*class RotatedBoundingBox {
@@ -203,7 +203,10 @@ class BoundingBox {
         void compareWith(BoundingBox&, const float);
 };
         
-static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
+static bool sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
+    return bbox_0.confidence_ > bbox_1.confidence_;
+}
+//static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
 //static bool sortComparisonFunction(const RotatedBoundingBox&, const RotatedBoundingBox&);
 //float calculateIOU (const RotatedBoundingBox&);
 //void compareWith(RotatedBoundingBox&, const float);

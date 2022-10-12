@@ -45,14 +45,13 @@ void csvWriter::closeFile() {
     ofs_.close();
 }
 
-
 void csvWriter::flush() {
     openFile();
     writeToFile();
     closeFile();
 }
 
-bool csvWriter::addToBuffer(std::vector<float> data) {
+void csvWriter::addToBuffer(std::vector<float> data) {
     buffer_.push_back(data);
     if (buffer_.size() >= max_buffer_size_) {
         flush();
@@ -162,9 +161,6 @@ BoundingBox::BoundingBox(float* data, int& class_id) {
     area_ = data[2] * data[3];
 }
 
-static bool sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
-    return bbox_0.confidence_ > bbox_1.confidence_;
-}
 
 float BoundingBox::calculateIOU(const BoundingBox& bbox) {
     const float x_min_new = std::max(x_min_, bbox.x_min_);
@@ -181,8 +177,7 @@ float BoundingBox::calculateIOU(const BoundingBox& bbox) {
         return 0.0f;
     }
 
-  distortion_model_ = distortion_model;
-  position_mode_ = position_mode;    return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
+  return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
 } 
 
 void BoundingBox::compareWith(BoundingBox& bbox, const float thred_IOU) {
