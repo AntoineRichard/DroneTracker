@@ -65,11 +65,11 @@ include_directories(
 )
 
 add_library(ObjectDetection src/ObjectDetection.cpp)
-add_library(ObjectDetector src/ObjectDetector.cpp)
 add_library(Tracker src/Tracker.cpp)
 add_library(PoseEstimator src/PoseEstimator.cpp)
 add_library(KalmanFilter src/KalmanFilter.cpp)
 add_library(Hungarian src/Hungarian.cpp)
+add_library(DetectionUtils src/DetectionUtils.cpp)
 
 #add_executable(depth_extractor src/depth_extractor.cpp)
 add_executable(detection_node src/detection_node.cpp)
@@ -85,7 +85,11 @@ add_executable(detection_node src/detection_node.cpp)
 target_link_libraries(detection_node
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
-    ObjectDetection
+    Tracker
+    PoseEstimator
+    KalmanFilter
+    Hungarian
+    DetectionUtils    
     nvinfer
     cudart
 )

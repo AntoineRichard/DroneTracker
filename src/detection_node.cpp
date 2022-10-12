@@ -2,7 +2,8 @@
 #include <vector>
 #include <map>
 
-#include <detect_and_track/ObjectDetector.h>
+#include <detect_and_track/DetectionUtils.h>
+
 #include <detect_and_track/BoundingBox2D.h>
 #include <detect_and_track/BoundingBoxes2D.h>
 
