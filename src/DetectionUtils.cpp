@@ -17,7 +17,7 @@ Detect::Detect(GlobalParameters& global_parameters, DetectionParameters& detecti
   OD_ = new ObjectDetector(image_size_, detection_parameters, nms_parameters);
 }
 
-void Detect::build(GlobalParameters& global_parameters, DetectionParameters& detection_parameters,
+void Detect::buildDetect(GlobalParameters& global_parameters, DetectionParameters& detection_parameters,
                NMSParameters& nms_parameters) {
   // Object detector parameters
   image_rows_ = global_parameters.image_height;
@@ -76,15 +76,6 @@ void Detect::generateDetectionImage(cv::Mat& image, const std::vector<std::vecto
   }
 }
 
-void Detect::generateTrackingImage(cv::Mat& image, const std::vector<std::map<unsigned int, std::vector<float>>> tracker_states) {
-  for (unsigned int i=0; i < tracker_states.size(); i++) {
-    for (auto & element : tracker_states[i]) {
-      cv::Rect rect(element.second[0] - element.second[4]/2, element.second[1]-element.second[5]/2, element.second[4], element.second[5]);
-      cv::rectangle(image, rect, ColorPalette[element.first % 24], 3);
-      cv::putText(image, class_map_[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[4]/2,element.second[1]-element.second[5]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
-    }
-  }
-}
 
 void Detect::detectObjects(const cv::Mat& image, std::vector<std::vector<BoundingBox>>& bboxes) {
   bboxes.clear();
@@ -122,7 +113,7 @@ Locate::Locate(GlobalParameters& glo_p, LocalizationParameters& loc_p, CameraPar
   PE_ = new PoseEstimator(glo_p, loc_p, cam_p);
 }
 
-void Locate::build(GlobalParameters& glo_p, LocalizationParameters& loc_p, CameraParameters& cam_p) {
+void Locate::buildLocate(GlobalParameters& glo_p, LocalizationParameters& loc_p, CameraParameters& cam_p) {
   // Object instantiation
   PE_ = new PoseEstimator(glo_p, loc_p, cam_p);
 }
@@ -178,7 +169,7 @@ void Locate::printProfilingLocalization(){
 
 Track2D::Track2D(){}
 
-Track2D::Track2D(int num_classes, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p){
+Track2D::Track2D(DetectionParameters& det_p, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p){
   Q_ = kal_p.Q;
   R_ = kal_p.R;
   dist_threshold_ = tra_p.distance_thresh;
@@ -193,8 +184,9 @@ Track2D::Track2D(int num_classes, KalmanParameters& kal_p, TrackingParameters& t
   max_bbox_width_ = bbo_p.max_bbox_width;
   min_bbox_height_ = bbo_p.min_bbox_height;
   max_bbox_height_ = bbo_p.max_bbox_width;
+  class_map_ = det_p.class_map;
 
-  for (unsigned int i=0; i<num_classes; i++){ // Create as many trackers as their are classes
+  for (unsigned int i=0; i<det_p.num_classes; i++){ // Create as many trackers as their are classes
     Trackers_.push_back(new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
                       area_threshold_, body_ratio_, dt_, use_dim_,
                       use_vel_, Q_, R_)); 
@@ -260,24 +252,58 @@ void Track2D::track(const std::vector<std::vector<BoundingBox>>& bboxes,
 #endif
 }
 
-void Track2D::printProfiling(){
+void Track2D::track(const std::vector<std::vector<BoundingBox>>& bboxes,
+               std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states, const float& dt) {
+#ifdef PROFILE
+  start_tracking_ = std::chrono::system_clock::now();
+#endif 
+  std::vector<std::vector<std::vector<float>>> states;
+  cast2states(states, bboxes);
+  for (unsigned int i=0; i < tracker_states.size(); i++){
+    std::vector<std::vector<float>> states_to_track;
+    states_to_track = states[i];
+    Trackers_[i]->update(dt, states_to_track);
+    Trackers_[i]->getStates(tracker_states[i]);
+  }
+#ifdef PROFILE
+  end_tracking_ = std::chrono::system_clock::now();
+#endif
+}
+
+void Track2D::generateTrackingImage(cv::Mat& image, const std::vector<std::map<unsigned int, std::vector<float>>> tracker_states) {
+  for (unsigned int i=0; i < tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      cv::Rect rect(element.second[0] - element.second[4]/2, element.second[1]-element.second[5]/2, element.second[4], element.second[5]);
+      cv::rectangle(image, rect, ColorPalette[element.first % 24], 3);
+      cv::putText(image, class_map_[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[4]/2,element.second[1]-element.second[5]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
+    }
+  }
+}
+
+void Track2D::printProfilingTracking(){
 #ifdef PROFILE
   printf(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection_ - start_detection_).count());
   printf(" - Tracking done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking_ - start_tracking_).count());
 #endif
 }
 
-/*void DetectAndLocate::DetectAndLocate() : Detect(), Locate(){}
-void DetectAndLocate::DetectAndLocate() : Detect(), Locate(){}
+DetectAndLocate::DetectAndLocate() : Detect(), Locate(){}
+DetectAndLocate::DetectAndLocate(GlobalParameters& glo_p, DetectionParameters& det_p, NMSParameters& nms_p,
+      LocalizationParameters& loc_p, CameraParameters& cam_p) : Detect(glo_p, det_p, nms_p), Locate(glo_p, loc_p, cam_p){}
 void DetectAndLocate::applyOnFolder(std::string, std::string, bool, bool, bool) {}
 void DetectAndLocate::applyOnVideo(std::string, std::string, bool, bool, bool) {}
 
-void DetectAndTrack2D::DetectAndTrack2D() : Detect(), Track2D(){}
-void DetectAndTrack2D::DetectAndTrack2D() : Detect(), Track2D(){}
+DetectAndTrack2D::DetectAndTrack2D() : Detect(), Track2D(){}
+DetectAndTrack2D::DetectAndTrack2D(GlobalParameters& glo_p, DetectionParameters& det_p, NMSParameters& nms_p,
+      KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p) : Detect(glo_p,
+      det_p, nms_p), Track2D(det_p, kal_p, tra_p, bbo_p){}
 void DetectAndTrack2D::applyOnFolder(std::string, std::string, bool, bool, bool) {}
 void DetectAndTrack2D::applyOnVideo(std::string, std::string, bool, bool, bool) {}
 
-void DetectTrack2DAndLocate::DetectTrack2DAndLocate() : Detect(), Track2D(), Locate(){}
-void DetectTrack2DAndLocate::DetectTrack2DAndLocate() : Detect(), Track2D(), Locate(){}
+DetectTrack2DAndLocate::DetectTrack2DAndLocate() : Detect(), Track2D(), Locate(){}
+DetectTrack2DAndLocate::DetectTrack2DAndLocate(GlobalParameters& glo_p, DetectionParameters& det_p,
+      NMSParameters& nms_p, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p, 
+      LocalizationParameters& loc_p, CameraParameters& cam_p) : Detect(glo_p, det_p, nms_p), Track2D(det_p, kal_p, 
+      tra_p, bbo_p), Locate(glo_p, loc_p, cam_p){}
 void DetectTrack2DAndLocate::applyOnFolder(std::string, std::string, bool, bool, bool) {}
-void DetectTrack2DAndLocate::applyOnVideo(std::string, std::string, bool, bool, bool) {}*/
+void DetectTrack2DAndLocate::applyOnVideo(std::string, std::string, bool, bool, bool) {}

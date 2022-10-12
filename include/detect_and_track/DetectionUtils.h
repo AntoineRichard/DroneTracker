@@ -53,12 +53,11 @@ class Detect {
   public:
     Detect();
     Detect(GlobalParameters&, DetectionParameters&, NMSParameters&);
-    void build(GlobalParameters&, DetectionParameters&, NMSParameters&);
+    void buildDetect(GlobalParameters&, DetectionParameters&, NMSParameters&);
     ~Detect();
 
     void detectObjects(const cv::Mat&, std::vector<std::vector<BoundingBox>>&);
     void generateDetectionImage(cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
-    void generateTrackingImage(cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>);
     void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
     void padImage(const cv::Mat&);
     void printProfilingDetection();
@@ -68,7 +67,7 @@ class Detect {
 
 
 class Locate {
-  private:
+  protected:
     //Profiling variables
 #ifdef PROFILE
     std::chrono::time_point start_distance_;
@@ -82,7 +81,7 @@ class Locate {
   public:
     Locate();
     Locate(GlobalParameters&, LocalizationParameters&, CameraParameters&);
-    void build(GlobalParameters&, LocalizationParameters&, CameraParameters&);
+    void buildLocate(GlobalParameters&, LocalizationParameters&, CameraParameters&);
     ~Locate();
 
     void locate(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&,
@@ -95,7 +94,7 @@ class Locate {
 
 
 class Track2D {
-  private:
+  protected:
     // Tracker parameters
     std::vector<float> Q_;
     std::vector<float> R_;
@@ -119,6 +118,9 @@ class Track2D {
 
     // dt update for Kalman 
     float dt_;
+    
+    // Object detector parameters
+    std::vector<std::string> class_map_;
 
     std::vector<Tracker2D*> Trackers_;
 
@@ -127,38 +129,46 @@ class Track2D {
 
   public:
     Track2D();
-    Track2D(int, KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
+    Track2D(DetectionParameters&, KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
     ~Track2D();
 
     void track(const std::vector<std::vector<BoundingBox>>&,
               std::vector<std::map<unsigned int, std::vector<float>>>&);
-    void printProfiling();
+    void track(const std::vector<std::vector<BoundingBox>>&,
+              std::vector<std::map<unsigned int, std::vector<float>>>&,
+              const float&);
+    void generateTrackingImage(cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>);
+    void printProfilingTracking();
 };
 
 
-/*class DetectAndLocate : public Detect, public Locate {
+class DetectAndLocate : public Detect, public Locate {
   public:
     DetectAndLocate();
-    DetectAndLocate();
+    DetectAndLocate(GlobalParameters&, DetectionParameters&, NMSParameters&,
+                    LocalizationParameters&, CameraParameters&);
     void applyOnFolder(std::string, std::string, bool, bool, bool);
     void applyOnVideo(std::string, std::string, bool, bool, bool);
-}
+};
 
 
-class DetectAndTrack2D : public Detect, public Locate {
+class DetectAndTrack2D : public Detect, public Track2D {
   public:
     DetectAndTrack2D();
-    DetectAndTrack2D();
+    DetectAndTrack2D(GlobalParameters&, DetectionParameters&, NMSParameters&,
+                     KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
     void applyOnFolder(std::string, std::string, bool, bool, bool);
     void applyOnVideo(std::string, std::string, bool, bool, bool);
-}
+};
 
 
 class DetectTrack2DAndLocate : public Detect, public Locate, public Track2D {
   public:
     DetectTrack2DAndLocate();
-    DetectTrack2DAndLocate();
+    DetectTrack2DAndLocate(GlobalParameters&, DetectionParameters&, NMSParameters&,
+                           KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&,
+                           LocalizationParameters&, CameraParameters&);
     void applyOnFolder(std::string, std::string, bool, bool, bool);
     void applyOnVideo(std::string, std::string, bool, bool, bool);
-}*/
+};
 #endif
