@@ -503,9 +503,9 @@ std::vector<std::map<unsigned int, std::vector<float>>> PoseEstimator::estimateP
       pixel[0] = element.second[0];
       pixel[1] = element.second[1];
       if (distortion_model_ == 1){
-        distancePixel2PointBrownConrady(distances[i][element.first], pixel, point);
+        distancePixel2PointBrownConrady(distances[i].at(element.first), pixel, point);
       } else {
-        distancePixel2PointPinHole(distances[i][element.first], pixel, point);
+        distancePixel2PointPinHole(distances[i].at(element.first), pixel, point);
       }
       point_maps[i].insert(std::pair(element.first, point));
     }
