@@ -70,10 +70,12 @@ add_library(PoseEstimator src/PoseEstimator.cpp)
 add_library(KalmanFilter src/KalmanFilter.cpp)
 add_library(Hungarian src/Hungarian.cpp)
 add_library(DetectionUtils src/DetectionUtils.cpp)
+add_library(Utils src/utils.cpp)
+add_library(ROSWrappers src/ROSWrappers.cpp)
 
 #add_executable(depth_extractor src/depth_extractor.cpp)
 add_executable(detection_node src/detection_node.cpp)
-#add_executable(detection_and_position_node src/detection_and_position_node.cpp)
+add_executable(detection_and_position_node src/detection_and_position_node.cpp)
 #add_executable(detect_locate_and_in_image_tracking_node src/detect_locate_and_in_image_tracking_node.cpp)
 
 
@@ -83,25 +85,34 @@ add_executable(detection_node src/detection_node.cpp)
 #)
 
 target_link_libraries(detection_node
+    ROSWrappers
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
+    DetectionUtils    
     Tracker
+    Hungarian
     PoseEstimator
     KalmanFilter
-    Hungarian
-    DetectionUtils    
+    ObjectDetection
+    Utils
     nvinfer
     cudart
 )
 
-#target_link_libraries(detection_and_position_node
-#    ${catkin_LIBRARIES}
-#    ${OpenCV_LIBS}
-#    PoseEstimator
-#    ObjectDetection
-#    nvinfer
-#    cudart
-#)
+target_link_libraries(detection_and_position_node
+    ROSWrappers
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBS}
+    DetectionUtils    
+    Tracker
+    Hungarian
+    PoseEstimator
+    KalmanFilter
+    ObjectDetection
+    Utils
+    nvinfer
+    cudart
+)
 
 #target_link_libraries(detect_locate_and_in_image_tracking_node
 #    ${catkin_LIBRARIES}
