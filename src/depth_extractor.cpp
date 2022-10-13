@@ -25,7 +25,6 @@ ImageConverter::ImageConverter() : nh_("~"), it_(nh_) {
 
 void ImageConverter::depthCallback(const sensor_msgs::ImageConstPtr& msg){
     cv_bridge::CvImagePtr cv_ptr;
-    //ROS_INFO("%s",msg->encoding.c_str());
     try {
       cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1);
     }
