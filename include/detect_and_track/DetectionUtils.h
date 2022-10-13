@@ -130,6 +130,7 @@ class Track2D {
   public:
     Track2D();
     Track2D(DetectionParameters&, KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
+    void buildTrack2D(DetectionParameters&, KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
     ~Track2D();
 
     void track(const std::vector<std::vector<BoundingBox>>&,

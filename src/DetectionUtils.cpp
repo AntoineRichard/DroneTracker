@@ -193,6 +193,30 @@ Track2D::Track2D(DetectionParameters& det_p, KalmanParameters& kal_p, TrackingPa
   }
 }
 
+void Track2D::buildTrack2D(DetectionParameters& det_p, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p){
+  Q_ = kal_p.Q;
+  R_ = kal_p.R;
+  dist_threshold_ = tra_p.distance_thresh;
+  center_threshold_ = tra_p.center_thresh;
+  area_threshold_ = tra_p.area_thresh;
+  body_ratio_ = tra_p.body_ratio;
+  use_dim_ = kal_p.use_dim;
+  use_vel_ = kal_p.use_vel;
+  dt_ = tra_p.dt;
+  max_frames_to_skip_ = tra_p.max_frames_to_skip;
+  min_bbox_width_ = bbo_p.min_bbox_width;
+  max_bbox_width_ = bbo_p.max_bbox_width;
+  min_bbox_height_ = bbo_p.min_bbox_height;
+  max_bbox_height_ = bbo_p.max_bbox_width;
+  class_map_ = det_p.class_map;
+
+  for (unsigned int i=0; i<det_p.num_classes; i++){ // Create as many trackers as their are classes
+    Trackers_.push_back(new Tracker2D(max_frames_to_skip_, dist_threshold_, center_threshold_,
+                      area_threshold_, body_ratio_, dt_, use_dim_,
+                      use_vel_, Q_, R_)); 
+  }
+}
+
 Track2D::~Track2D() {
   Trackers_.clear();
 }

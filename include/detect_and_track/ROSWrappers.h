@@ -5,8 +5,6 @@
 #include <detect_and_track/DetectionUtils.h>
 
 // Custom messages
-#include <detect_and_track/ObjectDetection.h>
-#include <detect_and_track/PoseEstimator.h>
 #include <detect_and_track/BoundingBox2D.h>
 #include <detect_and_track/BoundingBoxes2D.h>
 #include <detect_and_track/PositionBoundingBox2D.h>
@@ -20,6 +18,8 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <image_transport/image_transport.h>
 #include <std_msgs/Header.h>
+#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/Pose.h>
 #include <ros/ros.h>
 
 
@@ -48,6 +48,7 @@ class ROSDetect : public Detect {
 class ROSDetectAndLocate : public ROSDetect, public Locate {
   protected:
     image_transport::Subscriber depth_sub_;
+    ros::Publisher pose_array_pub_;
 #ifdef PUBLISH_DETECTION_IMAGE   
     image_transport::Publisher detection_pub_;
 #endif
@@ -86,7 +87,14 @@ class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D {
     ros::Time t1_;
     ros::Time t2_;   
 
-    void publishTrackingIamge(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&)
+    void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void publishDetectionsAndPositions(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                                       std::vector<std::map<unsigned int, std::vector<float>>>&,
+                                       std_msgs::Header&);
+    void publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                          std_msgs::Header&);
+    void publishPositions(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                          std_msgs::Header&);
     virtual void imageCallback(const sensor_msgs::ImageConstPtr&) override;
 
   public:

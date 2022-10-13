@@ -13,7 +13,7 @@ ROSDetect::ROSDetect() : nh_("~"), it_(nh_), Detect() {
   nh_.param("conf_tresh", nms_p.conf_thresh,0.25f);
   nh_.param("max_output_bbox_count", nms_p.max_output_bbox_count, 1000);
   // Model parameters
-  std::string default_path_to_engine("None");
+  std::string default_path_to_engine("None2");
   std::string path_to_engine;
   std::vector<std::string> default_class_map {std::string("object")};
   nh_.param("path_to_engine", det_p.engine_path, default_path_to_engine);
@@ -123,9 +123,7 @@ ROSDetectAndLocate::ROSDetectAndLocate() : ROSDetect(), Locate() {
   
   depth_sub_ = it_.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &ROSDetectAndLocate::depthCallback, this);
   depth_info_sub_ = nh_.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &ROSDetectAndLocate::depthInfoCallback, this);
-#ifdef PUBLISH_DETECTION_IMAGE
-  detection_pub_ = it_.advertise("/detection/raw_detection", 1);
-#endif
+  pose_array_pub_ = nh_.advertise<geometry_msgs::PoseArray>("/detection/pose_array", 1);
 #ifdef PUBLISH_DETECTION_WITH_POSITION
   positions_bboxes_pub_ = nh_.advertise<detect_and_track::PositionBoundingBox2DArray>("/detection/positions_bboxes",1);
 #else
@@ -161,12 +159,16 @@ void ROSDetectAndLocate::publishDetectionsAndPositions(std::vector<std::vector<B
                                                    std_msgs::Header& header) {
   detect_and_track::PositionBoundingBox2DArray ros_bboxes;
   detect_and_track::PositionBoundingBox2D ros_bbox;
+  geometry_msgs::PoseArray pose_array;
+  geometry_msgs::Pose pose;
   std::vector<detect_and_track::PositionBoundingBox2D> vec_ros_bboxes;
+  std::vector<geometry_msgs::Pose> poses;
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
+      // BBox + Position
       ros_bbox.bbox.min_x = bboxes[i][j].x_min_;
       ros_bbox.bbox.min_y = bboxes[i][j].y_min_;
       ros_bbox.bbox.height = bboxes[i][j].h_;
@@ -176,13 +178,22 @@ void ROSDetectAndLocate::publishDetectionsAndPositions(std::vector<std::vector<B
       ros_bbox.position.y = points[i][j][1];
       ros_bbox.position.z = points[i][j][2];
       vec_ros_bboxes.push_back(ros_bbox);
+      // Pose Array (nice for visualization)
+      pose.position.x = points[i][j][0];
+      pose.position.y = points[i][j][1];
+      pose.position.z = points[i][j][2];
+      pose.orientation.w = 1.0;
+      poses.push_back(pose);
     }
   }
   ros_bboxes.header.stamp = header.stamp;
   ros_bboxes.header.frame_id = header.frame_id;
   ros_bboxes.bboxes = vec_ros_bboxes;
+  pose_array.header = ros_bboxes.header;
+  pose_array.poses = poses;
   
   positions_bboxes_pub_.publish(ros_bboxes);
+  pose_array_pub_.publish(pose_array);
 }
 
 #else
@@ -193,26 +204,39 @@ void ROSDetectAndLocate::publishPositions(std::vector<std::vector<BoundingBox>>&
   unsigned int counter = 0;
   detect_and_track::PositionIDArray id_positions;
   detect_and_track::PositionID id_position;
+  geometry_msgs::PoseArray pose_array;
+  geometry_msgs::Pose pose;
   std::vector<detect_and_track::PositionID> vec_id_positions;
+  std::vector<geometry_msgs::Pose> poses;
 
   for (unsigned int i=0; i<bboxes.size(); i++) {
     for (unsigned int j=0; j<bboxes[i].size(); j++) {
       if (!bboxes[i][j].valid_) {
         continue;
       }
+      // Position
       id_position.position.x = points[i][j][0];
       id_position.position.y = points[i][j][1];
       id_position.position.z = points[i][j][2];
       id_position.detection_id = counter;
-      counter ++;
       vec_id_positions.push_back(id_position);
+      // Pose Array (nice for visualization)
+      pose.position.x = points[i][j][0];
+      pose.position.y = points[i][j][1];
+      pose.position.z = points[i][j][2];
+      pose.orientation.w = 1.0;
+      counter ++;
+      poses.push_back(pose);
     }
   }
   id_positions.header.stamp = header.stamp;
   id_positions.header.frame_id = header.frame_id;
   id_positions.positions = vec_id_positions;
-
+  pose_array.header = id_positions.header;
+  pose_array.poses = poses;
+  
   positions_pub_.publish(id_positions);
+  pose_array_pub_.publish(pose_array);
 }
 #endif
 
@@ -254,7 +278,50 @@ void ROSDetectAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif
 }
 
-void ROSDetectTrack2DAndLocate::publishTrackerImage(cv::Mat& tracker_image,
+ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), Track2D() {
+  DetectionParameters det_p;
+  KalmanParameters kal_p;
+  TrackingParameters tra_p;
+  BBoxRejectionParameters bbo_p;
+  // Model parameters
+  std::string default_path_to_engine("None");
+  std::string path_to_engine;
+  std::vector<std::string> default_class_map {std::string("object")};
+  nh_.param("path_to_engine", det_p.engine_path, default_path_to_engine);
+  nh_.param("num_classes", det_p.num_classes, 1);
+  nh_.param("class_map", det_p.class_map, default_class_map);
+  nh_.param("num_buffers", det_p.num_buffers, 2);
+  // Kalman parameters
+  std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
+  std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
+  Q_.resize(6);
+  R_.resize(6);
+  nh_.param("Q", kal_p.Q, default_Q);
+  nh_.param("R", kal_p.R, default_R);
+  nh_.param("use_vel", kal_p.use_vel, false);
+  nh_.param("use_dim", kal_p.use_vel, true);
+  // Tracking parameters
+  nh_.param("center_threshold", tra_p.center_thresh, 80.0f);
+  nh_.param("dist_threshold", tra_p.distance_thresh, 150.0f);
+  nh_.param("body_ratio", tra_p.body_ratio, 0.5f);
+  nh_.param("area_threshold", tra_p.area_thresh, 2.0f);
+  nh_.param("dt", tra_p.dt, 0.02f);
+  nh_.param("max_frames_to_skip", tra_p.max_frames_to_skip, 10);
+  // BBox rejection
+  nh_.param("min_bbox_width", bbo_p.min_bbox_width, 60);
+  nh_.param("max_bbox_width", bbo_p.max_bbox_width, 400);
+  nh_.param("min_bbox_width", bbo_p.min_bbox_height, 60);
+  nh_.param("max_bbox_width", bbo_p.max_bbox_height, 300);
+  buildTrack2D(det_p, kal_p, tra_p, bbo_p);
+
+#ifdef PUBLISH_DETECTION_IMAGE
+  tracker_pub_ = it_.advertise("/detection/tracking", 1);
+#endif
+}
+
+ROSDetectTrack2DAndLocate::~ROSDetectTrack2DAndLocate(){}
+
+void ROSDetectTrack2DAndLocate::publishTrackingImage(cv::Mat& image_tracker,
                                                     std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
   generateTrackingImage(image_tracker, tracker_states);
   cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
@@ -264,6 +331,7 @@ void ROSDetectTrack2DAndLocate::publishTrackerImage(cv::Mat& tracker_image,
   tracker_pub_.publish(image_ptr_out_);
 }
 
+#ifdef PUBLISH_DETECTION_WITH_POSITION
 void ROSDetectTrack2DAndLocate::publishDetectionsAndPositions(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
                                                               std::vector<std::map<unsigned int, std::vector<float>>>& points,
                                                               std_msgs::Header& header){
@@ -301,7 +369,7 @@ void ROSDetectTrack2DAndLocate::publishDetectionsAndPositions(std::vector<std::m
   positions_bboxes_pub_.publish(ros_bboxes);
   pose_array_pub_.publish(pose_array);
 }
-
+#else
 void ROSDetectTrack2DAndLocate::publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
                                                   std_msgs::Header& header) {
   detect_and_track::BoundingBoxes2D ros_bboxes;
@@ -319,8 +387,8 @@ void ROSDetectTrack2DAndLocate::publishDetections(std::vector<std::map<unsigned 
       vec_ros_bboxes.push_back(ros_bbox);
     }
   }
-  ros_bboxes.header.stamp = cv_ptr->header.stamp;
-  ros_bboxes.header.frame_id = cv_ptr->header.frame_id;
+  ros_bboxes.header.stamp = header.stamp;
+  ros_bboxes.header.frame_id = header.frame_id;
   ros_bboxes.bboxes = vec_ros_bboxes;
 
   bboxes_pub_.publish(ros_bboxes);
@@ -344,6 +412,7 @@ void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned i
   pose_array.poses = poses;
   pose_array_pub_.publish(pose_array);
 }
+#endif
 
 void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   t2_ = t1_;
@@ -370,7 +439,7 @@ void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& 
   tracker_states.resize(num_classes_);
   detectObjects(image, bboxes);
   track(bboxes, tracker_states, dt_);
-  locate(depth_image_, bboxes, distances, points);
+  locate(depth_image_, tracker_states, distances, points);
 #ifdef PROFILE
   auto end_inference = std::chrono::system_clock::now();
   ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_tracking - start_image).count());
