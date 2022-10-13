@@ -74,9 +74,9 @@ add_library(Utils src/utils.cpp)
 add_library(ROSWrappers src/ROSWrappers.cpp)
 
 #add_executable(depth_extractor src/depth_extractor.cpp)
-add_executable(detection_node src/detection_node.cpp)
-add_executable(detection_and_position_node src/detection_and_position_node.cpp)
-#add_executable(detect_locate_and_in_image_tracking_node src/detect_locate_and_in_image_tracking_node.cpp)
+add_executable(detect_node src/detect_node.cpp)
+add_executable(detect_and_locate_node src/detect_and_locate_node.cpp)
+add_executable(detect_track2D_and_locate_node src/detect_track2D_and_locate_node.cpp)
 
 
 #target_link_libraries(depth_extractor
@@ -84,7 +84,7 @@ add_executable(detection_and_position_node src/detection_and_position_node.cpp)
 #    ${OpenCV_LIBS}
 #)
 
-target_link_libraries(detection_node
+target_link_libraries(detect_node
     ROSWrappers
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
@@ -99,7 +99,7 @@ target_link_libraries(detection_node
     cudart
 )
 
-target_link_libraries(detection_and_position_node
+target_link_libraries(detect_and_locate_node
     ROSWrappers
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
@@ -114,14 +114,17 @@ target_link_libraries(detection_and_position_node
     cudart
 )
 
-#target_link_libraries(detect_locate_and_in_image_tracking_node
-#    ${catkin_LIBRARIES}
-#    ${OpenCV_LIBS}
-#    Tracker
-#    Hungarian
-#    ObjectDetection
-#    PoseEstimator
-#    KalmanFilter
-#    nvinfer
-#    cudart
-#)
+target_link_libraries(detect_track2D_and_locate_node
+    ROSWrappers
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBS}
+    DetectionUtils    
+    Tracker
+    Hungarian
+    PoseEstimator
+    KalmanFilter
+    ObjectDetection
+    Utils
+    nvinfer
+    cudart
+)
