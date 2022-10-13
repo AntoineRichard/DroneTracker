@@ -5,6 +5,6 @@
     <rosparam file="$(find detect_and_track)/config/object_detection.yaml"/>
     <rosparam file="$(find detect_and_track)/config/pose_estimator.yaml"/>
   </group>
-  <node name="detect_and_locate" pkg="detect_and_track" type="detection_and_position_node" output="screen">
+  <node name="detect_and_locate" pkg="detect_and_track" type="detect_and_locate_node" output="screen">
   </node>
 </launch>
