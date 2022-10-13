@@ -450,7 +450,7 @@ void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& 
 
 #ifdef PUBLISH_DETECTION_IMAGE
   publishDetectionImage(image, bboxes);
-  publishTrackingImage(image, tracker_states);
+  publishTrackingImage(image_tracker, tracker_states);
 #endif
 #ifdef PUBLISH_DETECTION_WITH_POSITION
   publishDetectionsAndPositions(tracker_states, points, cv_ptr->header);
