@@ -2,7 +2,7 @@
 
 This repository enables the detection and tracking of objects on machines equipped with Nvidia GPUs.
 The code is written in C++ 17, enabling running networks such as Yolov5 without python3 installed.
-We provide means to track the object in the image plane (u,v) coordinate tracking, we also support rotated bounding-boxes (u,v,theta), as well as 3D tracking (x,y,z) if an RGB-D camera is used.
+We provide means to track the object in the image plane (u,v coordinate tracking), rotated bounding-boxes (u,v,theta), as well as 3D tracking (x,y,z) if an RGB-D camera is used.
 More on that later.
 
 # Requirements and installation
@@ -14,7 +14,7 @@ To run this code, the following dependencies need to be installed:
 - CuDNN 8.X (tested with version 8.4.1.5 (for cuda 11.6))
 - TensorRT 8.X (tested with version 8.4.1.5)
 
-For the compilation to work, the CMakeList must be modified, the include and link directories of TensorRT must be ajusted to match your own installation of TensorRT.
+For the compilation to work, the CMakeList must be modified. The include and link directories of TensorRT must be ajusted to match your own installation of TensorRT.
 
 This is what it looks like in our case (l33-34):
 ```
@@ -30,38 +30,38 @@ To do so, we first need to convert our model to an ONNX model, and then convert 
 
 ## Converting to ONNX
 As mentioned earlier, the first step consists in converting the model to ONNX.
-ONNX is a open-format designed to ease the deployement of neural-networks.
+ONNX is a open format designed to ease the deployement of neural-networks.
 If you are using YoLOv5 from ultralytics, you can use the following command:
 ```
 python3 export.py --weights PATH/2/PT_FILE.pt --img 640 --batch 1 --include onnx --simplify --opset 11
 ```
-If you are using another model, we recommend following the following tutorials:
+If you are using another model, we recommend following these tutorials:
 - Pytorch: https://pytorch.org/docs/stable/onnx.html
 - Tensorflow: https://onnxruntime.ai/docs/tutorials/tf-get-started.html
 
 Once the model is converted, we encourage you to check the generated model using the neutron app:
 - https://netron.app/
 
-This application will enable to visualize your network.
+This application will enable you to visualize your network.
 Using it, you can also check the number of classes the network is detecting.
 To do so, scroll down till you reach the last layer of the network.
-On Yolov5 it looks somethng like that:
+On Yolov5 it looks like that:
 
 TODO Insert image
 
 We can see there that the shape of the final layer is `1x25200x6`. This means that we are detecting a single class. 
-You were detecting 2 classes it would read `1x25200x7`, 3 classes `1x252600x8`, etc...
-The way it works for most object detection neural-networks is as follows:
+If you were detecting 2 classes it would read `1x25200x7`, 3 classes `1x252600x8`, etc...
+This comes from the structure of the output layer. For regular, non-rotated bounding-boxes it looks like that:
 ```
 min_x, min_y, width, height, confidence, class_1, class_2,...,class_N
 ```
 This depends on your network and is only intended to help you find the number of classes your network can classify.
-If your network detects rotated bounding boxes this method not work.
+If your network detects rotated bounding boxes or polygons this method not work.
 
 
 ## Converting to TensorRT
 Now that we have our ONNX model we can turn it into a TensorRT engine, which is required to run this code.
-Before building the engine, make sure that you are on the target platform.
+Before building the engine, make sure that you are on the target deployment platform.
 This means that if you plan on deploying this model on a Jetson Xavier, you have to build it on the Xavier itself, and not your server or desktop/laptop.
 Some of the optimization done through the building process are unique to the target GPU.
 To compile the model use the following command:
@@ -79,17 +79,17 @@ export PATH=$PATH:/home/antoine/Downloads/TensorRT-8.4.1.5/bin
 ```
 The workspace argument is the maximum amount of VRAM allocated to the neural-net (in Mb).
 You can change this to suite your deployment need, 4Gb is propably too much for a Jetson Nano, 2Gb seems more reasonable.
-To increase the performance, on can also use the `--fp16` flag, which will force the model to run on float16 operations instead of float32.
+To increase the performance, one can also use the `--fp16` flag, which will force the model to run on float16 operations instead of float32.
 This should result in higher frames per second, but will also impact the network accuracy.
 
 # How to use this code with ROS
-Now that we have our model we are finally ready to get detecting!
+Now that we have our model, we are finally ready to get detecting!
 In ROS we provide premade profiles that worked we tested on the detection and tracking of drones and rocks.
 We provide four launch-files:
-- detect.launch, only detects the objects and outputs the bounding boxes as ROS messages.
-- detect_and_locate.launch, detects and estimates the 3D position of the objects in the camera local frame. They are then outputed as ROS messages.
-- detect_and_track.launch, detects and tracks objects, the tracks and detections are outputed as ROS messages.
-- detect_locate_and_track.launch, detects, locates and tracks the objects. They are then outputed as ROS messages.
+- `detect.launch`, only detects the objects and outputs the bounding boxes as ROS messages.
+- `detect_and_locate.launch`, detects and estimates the 3D position of the objects in the camera local frame. They are then outputed as ROS messages.
+- `detect_and_track2D.launch`, detects and tracks objects, the tracks and detections are outputed as ROS messages.
+- `detect_track_2D_and_locate.launch`, detects, locates and tracks the objects. They are then outputed as ROS messages.
 
 To use any of these files use the usual launch command. However, before you do, we would encourage you to go through the next section, how to configure the different components.
 
