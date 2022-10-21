@@ -70,19 +70,12 @@ class BaseExtendedKalmanFilter : public BaseKalmanFilter {
   protected:
     Eigen::MatrixXf dFdX_;
 
-    //virtual void initialize(const std::vector<float>&, const std::vector<float>&);
-    //virtual void getMeasurement(const std::vector<float>&);
-    //virtual void updateF(const float&);
     virtual void updatedFdX(const float&);
     virtual void updatedFdX();
     virtual void updateF(const float&);
     virtual void updateF();
-    //virtual void buildR(const std::vector<float>&);
-    //virtual void buildH();
     // Display methods.
     virtual void printdFdX();
-    //virtual void printF();
-    //virtual void printX();
 
   public:
     BaseExtendedKalmanFilter();

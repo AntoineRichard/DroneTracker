@@ -336,54 +336,6 @@ void BaseExtendedKalmanFilter::predict() {
 }
 
 /**
- * @brief Instantiates all the variables in the filter. 
- * @details This function instantiates the following variables:
- * X the state, P the covariance, Q the process noise, R the observation noise, F the dynamics,
- * H the observation matrix, and I an identity matrix.
- * To be implemented in child classes.
- * 
- * @param Q The reference to the process noise vector.
- * @param R The reference to the measurement noise vector.
- */
-//void BaseExtendedKalmanFilter::initialize(const std::vector<float>& Q, const std::vector<float>& R) {}
-
-/**
- * @brief Instantiates the observation matrix H. 
- * @details The function builds the observatiin matrix H.
- * To be implemented in child classes.
-
- * @param R The reference to the vector containing the noise of the measurement.
- */
-//void BaseExtendedKalmanFilter::buildH(){}
-
-/**
- * @brief Instantiates the measurement noise R. 
- * @details The function builds the measurement noise matrix R.
- * To be implemented in child classes.
-
- * @param R The reference to the vector containing the noise of the measurement.
- */
-//void BaseExtendedKalmanFilter::buildR(const std::vector<float>& R){}
-
-/**
- * @brief Resets the state and covariance.
- * @details This function resets the state and covariance of the filter.
- * The state is initialiazed to the value given by the user, the covariance is set to Q*Q.
- * 
- * @param initial_state The refence to the vector containing the value of the state should be reseted to.
- */
-//void BaseExtendedKalmanFilter::resetFilter(const std::vector<float>& initial_state) {}
-
-/**
- * @brief Updates the dynamics based on dt.
- * @details Updates the dt value in the dynamics such that the propagation of the velocity is correct.
- * To be implemented in child classes.
- * 
- * @param dt 
- */
-//void BaseExtendedKalmanFilter::updateF(const float& dt) {}
-
-/**
  * @brief Updates the derivative of the dynamics.
  * @details Updates the value of the dynamics' derivative.
  * To be implemented in child classes.
@@ -426,22 +378,6 @@ void BaseExtendedKalmanFilter::updateF() {}
  * 
  */
 void BaseExtendedKalmanFilter::printdFdX() {}
-
-/**
- * @brief Helper function to display the matrix F.
- * @details Helper function to display the matrix F.
- * To be implemented in child classes.
- * 
- */
-//void BaseExtendedKalmanFilter::printF() {}
-
-/**
- * @brief Helper function to display the state X.
- * @details Helper function to display the state X.
- * To be implemented in child classes.
- * 
- */
-//void BaseExtendedKalmanFilter::printX() {}
 
 /**
  * @brief Default constructor.
