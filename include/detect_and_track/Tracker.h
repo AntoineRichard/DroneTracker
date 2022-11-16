@@ -117,6 +117,7 @@ class BaseTracker {
     virtual float centroidsError(const std::vector<float>&, const std::vector<float>&) const;
     virtual float areaRatio(const std::vector<float>&, const std::vector<float>&) const;
     virtual void addNewObject();
+    void removeOldTracks();
   public:
     BaseTracker();
     BaseTracker(const int&, const float&, const float&, const float&, const float&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);

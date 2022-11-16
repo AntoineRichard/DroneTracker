@@ -394,6 +394,7 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
 
   // if there are not observations do not continue.  
   if (states.empty()) {
+    removeOldTracks();
     return;
   }
 
@@ -524,6 +525,15 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
   }
 
   // Remove old tracks.
+  removeOldTracks();
+
+#ifdef DEBUG_TRACKER
+  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Num tracks %d\n", __func__, __LINE__, track_id_count_);
+#endif
+}
+
+void BaseTracker::removeOldTracks(){
+  // Remove old tracks.
 #ifdef DEBUG_TRACKER
   printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Removing old tracks.\n", __func__, __LINE__);
 #endif
@@ -538,11 +548,8 @@ void BaseTracker::update(const float& dt, const std::vector<std::vector<float>>&
       ++it;
     }
   }
-
-#ifdef DEBUG_TRACKER
-  printf("\e[1;33m[DEBUG  ]\e[0m Tracker::%s::l%d Num tracks %d\n", __func__, __LINE__, track_id_count_);
-#endif
 }
+
 
 /**
  * @brief The distance between two states.
