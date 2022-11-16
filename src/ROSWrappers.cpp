@@ -1,5 +1,14 @@
 #include <detect_and_track/ROSWrappers.h>
 
+/**
+ * @brief Constructs a ROS node to perform object detection.
+ * @details This class wrapps around the object detector and integrates
+ * all the ROS related components required to run the network on ROS video
+ * streams. This node can perform multi-class detection and outputs the detected
+ * bounding boxes, and optionnaly, images of the bounding-boxes overlayed on top
+ * of the original image.
+ * 
+ */
 ROSDetect::ROSDetect() : nh_("~"), it_(nh_), Detect() {
   // Empty structs
   GlobalParameters glo_p;
@@ -20,9 +29,9 @@ ROSDetect::ROSDetect() : nh_("~"), it_(nh_), Detect() {
   nh_.param("num_classes", det_p.num_classes, 1);
   nh_.param("class_map", det_p.class_map, default_class_map);
   nh_.param("num_buffers", det_p.num_buffers, 2);
-
+  // Initializes the detector
   buildDetect(glo_p, det_p, nms_p);
-
+  // Creates the subscribers and publishers
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetect::imageCallback, this);
 #ifdef PUBLISH_DETECTION_IMAGE
   detection_pub_ = it_.advertise("/detection/raw_detection", 1);
@@ -33,6 +42,13 @@ ROSDetect::ROSDetect() : nh_("~"), it_(nh_), Detect() {
 ROSDetect::~ROSDetect() {
 }
 
+/**
+ * @brief 
+ * @details
+ * 
+ * @param image 
+ * @param bboxes 
+ */
 void ROSDetect::publishDetectionImage(cv::Mat& image, std::vector<std::vector<BoundingBox>>& bboxes) {
   generateDetectionImage(image, bboxes);
   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
@@ -42,6 +58,13 @@ void ROSDetect::publishDetectionImage(cv::Mat& image, std::vector<std::vector<Bo
   detection_pub_.publish(image_ptr_out_);
 }
 
+/**
+ * @brief 
+ * @details
+ * 
+ * @param bboxes 
+ * @param header 
+ */
 void ROSDetect::publishDetections(std::vector<std::vector<BoundingBox>>& bboxes, std_msgs::Header& header) {
   unsigned int counter = 0;
   detect_and_track::BoundingBoxes2D ros_bboxes;
@@ -70,6 +93,12 @@ void ROSDetect::publishDetections(std::vector<std::vector<BoundingBox>>& bboxes,
   bboxes_pub_.publish(ros_bboxes);
 }
 
+/**
+ * @brief
+ * @details
+ * 
+ * @param msg 
+ */
 void ROSDetect::imageCallback(const sensor_msgs::ImageConstPtr& msg) {
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
@@ -97,6 +126,11 @@ void ROSDetect::imageCallback(const sensor_msgs::ImageConstPtr& msg) {
   publishDetections(bboxes, cv_ptr->header);
 }
 
+
+/**
+ * @brief Construct a new ROSDetectAndLocate::ROSDetectAndLocate object
+ * 
+ */
 ROSDetectAndLocate::ROSDetectAndLocate() : ROSDetect(), Locate() {
   // Empty structs
   GlobalParameters glo_p;
@@ -134,6 +168,11 @@ ROSDetectAndLocate::ROSDetectAndLocate() : ROSDetect(), Locate() {
 ROSDetectAndLocate::~ROSDetectAndLocate() {
 }
 
+/**
+ * @brief 
+ * 
+ * @param msg 
+ */
 void ROSDetectAndLocate::depthInfoCallback(const sensor_msgs::CameraInfoConstPtr& msg){
   std::vector<double> P{msg->K[2], msg->K[5], msg->K[0], msg->K[4]};
   std::vector<float> Pf(msg->P.begin(), msg->P.end());
@@ -141,6 +180,11 @@ void ROSDetectAndLocate::depthInfoCallback(const sensor_msgs::CameraInfoConstPtr
   updateCameraInfo(Pf, K);
 }
 
+/**
+ * @brief 
+ * 
+ * @param msg 
+ */
 void ROSDetectAndLocate::depthCallback(const sensor_msgs::ImageConstPtr& msg){
   cv_bridge::CvImagePtr cv_ptr;
   try {
@@ -154,6 +198,13 @@ void ROSDetectAndLocate::depthCallback(const sensor_msgs::ImageConstPtr& msg){
 }
 
 #ifdef PUBLISH_DETECTION_WITH_POSITION
+/**
+ * @brief 
+ * 
+ * @param bboxes 
+ * @param points 
+ * @param header 
+ */
 void ROSDetectAndLocate::publishDetectionsAndPositions(std::vector<std::vector<BoundingBox>>& bboxes,
                                                    std::vector<std::vector<std::vector<float>>>& points,
                                                    std_msgs::Header& header) {
@@ -197,7 +248,13 @@ void ROSDetectAndLocate::publishDetectionsAndPositions(std::vector<std::vector<B
 }
 
 #else
-
+/**
+ * @brief 
+ * 
+ * @param bboxes 
+ * @param points 
+ * @param header 
+ */
 void ROSDetectAndLocate::publishPositions(std::vector<std::vector<BoundingBox>>& bboxes,
                                           std::vector<std::vector<std::vector<float>>>& points,
                                           std_msgs::Header& header) {
@@ -240,7 +297,11 @@ void ROSDetectAndLocate::publishPositions(std::vector<std::vector<BoundingBox>>&
 }
 #endif
 
-
+/**
+ * @brief 
+ * 
+ * @param msg 
+ */
 void ROSDetectAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
@@ -278,6 +339,11 @@ void ROSDetectAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
 #endif
 }
 
+
+/**
+ * @brief Construct a new ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate object
+ * 
+ */
 ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), Track2D() {
   DetectionParameters det_p;
   KalmanParameters kal_p;
@@ -321,6 +387,12 @@ ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), T
 
 ROSDetectTrack2DAndLocate::~ROSDetectTrack2DAndLocate(){}
 
+/**
+ * @brief 
+ * 
+ * @param image_tracker 
+ * @param tracker_states 
+ */
 void ROSDetectTrack2DAndLocate::publishTrackingImage(cv::Mat& image_tracker,
                                                     std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
   generateTrackingImage(image_tracker, tracker_states);
@@ -332,6 +404,13 @@ void ROSDetectTrack2DAndLocate::publishTrackingImage(cv::Mat& image_tracker,
 }
 
 #ifdef PUBLISH_DETECTION_WITH_POSITION
+/**
+ * @brief 
+ * 
+ * @param tracker_states 
+ * @param points 
+ * @param header 
+ */
 void ROSDetectTrack2DAndLocate::publishDetectionsAndPositions(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
                                                               std::vector<std::map<unsigned int, std::vector<float>>>& points,
                                                               std_msgs::Header& header){
@@ -369,7 +448,15 @@ void ROSDetectTrack2DAndLocate::publishDetectionsAndPositions(std::vector<std::m
   positions_bboxes_pub_.publish(ros_bboxes);
   pose_array_pub_.publish(pose_array);
 }
+
 #else
+
+/**
+ * @brief 
+ * 
+ * @param tracker_states 
+ * @param header 
+ */
 void ROSDetectTrack2DAndLocate::publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
                                                   std_msgs::Header& header) {
   detect_and_track::BoundingBoxes2D ros_bboxes;
@@ -394,6 +481,12 @@ void ROSDetectTrack2DAndLocate::publishDetections(std::vector<std::map<unsigned 
   bboxes_pub_.publish(ros_bboxes);
 }
 
+/**
+ * @brief 
+ * 
+ * @param points 
+ * @param header 
+ */
 void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned int, std::vector<float>>>& points,
                                                  std_msgs::Header& header) {
   geometry_msgs::PoseArray pose_array;
@@ -414,6 +507,11 @@ void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned i
 }
 #endif
 
+/**
+ * @brief 
+ * 
+ * @param msg 
+ */
 void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   t2_ = t1_;
   t1_ = ros::Time::now();
@@ -431,18 +529,18 @@ void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& 
   }
   cv::Mat image = cv_ptr->image;
   cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
-  cv::Mat image_tracker = image.clone();
   std::vector<std::vector<BoundingBox>> bboxes(num_classes_);
   std::vector<std::map<unsigned int, std::vector<float>>> tracker_states;
   std::vector<std::map<unsigned int, std::vector<float>>> points;
   std::vector<std::map<unsigned int, float>> distances;
   tracker_states.resize(num_classes_);
   detectObjects(image, bboxes);
+  cv::Mat image_tracker = image.clone();
   track(bboxes, tracker_states, dt_);
   locate(depth_image_, tracker_states, distances, points);
 #ifdef PROFILE
   auto end_inference = std::chrono::system_clock::now();
-  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_tracking - start_image).count());
+  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_inference - start_inference).count());
   printProfilingDetection();
   printProfilingTracking();
   printProfilingLocalization();

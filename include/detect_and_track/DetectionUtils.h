@@ -38,10 +38,10 @@ class Detect {
 
     //Profiling variables
 #ifdef PROFILE
-    std::chrono::time_point start_image_;
-    std::chrono::time_point end_image_;
-    std::chrono::time_point start_detection_;
-    std::chrono::time_point end_detection_;
+    std::chrono::time_point<std::chrono::system_clock> start_image_;
+    std::chrono::time_point<std::chrono::system_clock> end_image_;
+    std::chrono::time_point<std::chrono::system_clock> start_detection_;
+    std::chrono::time_point<std::chrono::system_clock> end_detection_;
 #endif
 
     // Object detector parameters
@@ -56,10 +56,10 @@ class Detect {
     void buildDetect(GlobalParameters&, DetectionParameters&, NMSParameters&);
     ~Detect();
 
-    void detectObjects(const cv::Mat&, std::vector<std::vector<BoundingBox>>&);
+    void detectObjects(cv::Mat&, std::vector<std::vector<BoundingBox>>&);
     void generateDetectionImage(cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
     void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
-    void padImage(const cv::Mat&);
+    void padImage(cv::Mat&);
     void printProfilingDetection();
     void applyOnFolder(std::string, std::string, bool, bool, bool);
     void applyOnVideo(std::string, std::string, bool, bool, bool);
@@ -70,10 +70,10 @@ class Locate {
   protected:
     //Profiling variables
 #ifdef PROFILE
-    std::chrono::time_point start_distance_;
-    std::chrono::time_point end_distance_;
-    std::chrono::time_point start_position_;
-    std::chrono::time_point end_position_;
+    std::chrono::time_point<std::chrono::system_clock> start_distance_;
+    std::chrono::time_point<std::chrono::system_clock> end_distance_;
+    std::chrono::time_point<std::chrono::system_clock> start_position_;
+    std::chrono::time_point<std::chrono::system_clock> end_position_;
 #endif
 
     PoseEstimator* PE_;
@@ -112,8 +112,8 @@ class Track2D {
 
     //Profiling variables
 #ifdef PROFILE
-    std::chrono::time_point start_tracking_;
-    std::chrono::time_point end_tracking_;
+    std::chrono::time_point<std::chrono::system_clock> start_tracking_;
+    std::chrono::time_point<std::chrono::system_clock> end_tracking_;
 #endif
 
     // dt update for Kalman 

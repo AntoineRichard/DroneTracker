@@ -34,17 +34,19 @@ void Detect::buildDetect(GlobalParameters& global_parameters, DetectionParameter
 
 Detect::~Detect() {}
 
-void Detect::padImage(const cv::Mat& image) {
+void Detect::padImage(cv::Mat& image) {
   float r;
   r = (float) image_size_ / std::max(image.rows, image.cols);
-  printf("%f",r);
+  printf("DEBUG: %f\n",r);
   if (r != 1) {
-    printf("Not implemented");
-  } else {
-    padding_rows_ = (image_size_ - image.rows)/2;
-    padding_cols_ = (image_size_ - image.cols)/2;
-    image.copyTo(padded_image_(cv::Range(padding_rows_,padding_rows_+image.rows),cv::Range(padding_cols_,padding_cols_+image.cols)));
+    cv::resize(image, image, cv::Size(), r, r, cv::INTER_AREA);
+    printf("Not implemented\n");
   }
+  printf("rows %d, cols%d\n", image.rows, image.cols);
+  padding_rows_ = (image_size_ - image.rows)/2;
+  padding_cols_ = (image_size_ - image.cols)/2;
+  image.copyTo(padded_image_(cv::Range(padding_rows_,padding_rows_+image.rows),cv::Range(padding_cols_,padding_cols_+image.cols)));
+  
 }
 
 void Detect::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
@@ -77,7 +79,7 @@ void Detect::generateDetectionImage(cv::Mat& image, const std::vector<std::vecto
 }
 
 
-void Detect::detectObjects(const cv::Mat& image, std::vector<std::vector<BoundingBox>>& bboxes) {
+void Detect::detectObjects(cv::Mat& image, std::vector<std::vector<BoundingBox>>& bboxes) {
   bboxes.clear();
   bboxes.resize(num_classes_);
 #ifdef PROFILE
@@ -97,8 +99,8 @@ void Detect::detectObjects(const cv::Mat& image, std::vector<std::vector<Boundin
 
 void Detect::printProfilingDetection() {
 #ifdef PROFILE
-  printf(" - Image processing done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_image_ - start_image_).count());
-  printf(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection_ - start_detection_).count());
+  printf(" - Image processing done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_image_ - start_image_).count());
+  printf(" - Object detection done in %ld ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection_ - start_detection_).count());
 #endif
 }
 
@@ -150,7 +152,7 @@ void Locate::locate(const cv::Mat& depth_image, const std::vector<std::map<unsig
   distances.clear();
   distances = PE_->extractDistanceFromDepth(depth_image, states);
 #ifdef PROFILE
-  nd_distance_ = std::chrono::system_clock::now();
+  end_distance_ = std::chrono::system_clock::now();
   start_position_ = std::chrono::system_clock::now();
 #endif
   points.clear();
@@ -162,8 +164,8 @@ void Locate::locate(const cv::Mat& depth_image, const std::vector<std::map<unsig
 
 void Locate::printProfilingLocalization(){
 #ifdef PROFILE
-  printf(" - Distance estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_distance_ - start_distance_).count());
-  printf(" - Position estimation done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_position_ - start_position_).count());
+  printf(" - Distance estimation done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_distance_ - start_distance_).count());
+  printf(" - Position estimation done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_position_ - start_position_).count());
 #endif
 }
 
@@ -306,8 +308,7 @@ void Track2D::generateTrackingImage(cv::Mat& image, const std::vector<std::map<u
 
 void Track2D::printProfilingTracking(){
 #ifdef PROFILE
-  printf(" - Object detection done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_detection_ - start_detection_).count());
-  printf(" - Tracking done in %ld us", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking_ - start_tracking_).count());
+  printf(" - Tracking done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking_ - start_tracking_).count());
 #endif
 }
 

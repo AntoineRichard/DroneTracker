@@ -101,3 +101,18 @@ class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D {
     ROSDetectTrack2DAndLocate();
     ~ROSDetectTrack2DAndLocate();
 };
+
+/*class ROSDetectTrack2DAndLocateTF : public ROSDetectTrack2DAndLocate {
+  protected:
+    // Transform parameters
+    std::string global_frame_;
+    std::string camera_frame_;
+    std::vector<std::string> frames_to_track_;
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener listener_;
+
+    virtual void imageCallback(const sensor_msgs::ImageConstPtr&) override;
+  public:
+    ROSDetectTrack2DAndLocateTF();
+    ~ROSDetectTrack2DAndLocateTF();
+};*/
