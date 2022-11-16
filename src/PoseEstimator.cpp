@@ -380,20 +380,20 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
     distance_vector.clear();
     for (unsigned int j=0; j < bboxes[i].size(); j++) {
 #ifdef PROFILE
-    start_distance = std::chrono::system_clock::now();
+    auto start_distance = std::chrono::system_clock::now();
 #endif
       // If the bounding box is invalid use -1 as distance.
       if (!bboxes[i][j].valid_) {
         distance_vector.push_back(-1);
 #ifdef PROFILE
-        end_distance = std::chrono::system_clock::now();
+        auto end_distance = std::chrono::system_clock::now();
         printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance done in %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
 #endif
         continue;
       }
       distance_vector.push_back(getDistance(depth_image, bboxes[i][j].x_min_, bboxes[i][j].y_min_, bboxes[i][j].w_, bboxes[i][j].h_ ));
 #ifdef PROFILE
-      end_distance = std::chrono::system_clock::now();
+      auto end_distance = std::chrono::system_clock::now();
       printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance time %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
 #endif
     }
@@ -433,11 +433,11 @@ std::vector<std::map<unsigned int, float>> PoseEstimator::extractDistanceFromDep
   for (unsigned int i=0; i < tracked_states.size(); i++) {
     for (auto & element : tracked_states[i]) {
 #ifdef PROFILE
-    start_distance = std::chrono::system_clock::now();
+    auto start_distance = std::chrono::system_clock::now();
 #endif
       distance_maps[i].insert(std::pair(element.first, getDistance(depth_image, element.second[0], element.second[1], element.second[4], element.second[5])));
 #ifdef PROFILE
-      end_distance = std::chrono::system_clock::now();
+      auto end_distance = std::chrono::system_clock::now();
       printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance time %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
 #endif
     }
