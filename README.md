@@ -8,7 +8,7 @@ More on that later.
 # Requirements and installation
 To run this code, the following dependencies need to be installed:
 - cmake 3.0.2 (or higher)
-- C++ 17 support
+- Support for C++ 17 or higher
 - OpenCV4.X (tested with version 4.2.0)
 - CUDA 11.X (tested with version 11.3)
 - CuDNN 8.X (tested with version 8.4.1.5 (for cuda 11.6))
@@ -110,7 +110,12 @@ The object detector has the following parameters, they can be changed in `config
 
 ### The pose estimation
 The object detector has the following parameters, they can be changed in `config/pose_estimator.yaml`:
-No parameters for now.
+- `lens_distortion_model`, `string`, the type of lens distortion model, either `pin_hole` or `plumb_blob`.
+- `K`, `std::vector<float>`, the parameters of the plumb blob distortion model. The list in the yaml must have a size of 5 and is organized as follows: `[k1,k2,k3,k4,k5]`.
+- `camera_parameters`, `std::vector<float>`, the parameters of the pin-hole model. The list in the yaml must have a size of 4 and is organized as follows: `[fx,fy,cx,cy]`.  
+- `position_mode`, `std::string`, the way the 3D position of the object is evaluated. For now we provide two modes, `min_distance`, and `center`. We plan on extending these to `mask`, and `box_approximation` when we'll add support for instance segmentation.
+- `rejection_threshold`, `float`, a parameter used in the min_distance mode, it sets the amount of closest points that are considered as outliers. These values must be between [0,1].
+- `keep_threshold`, `float`, a parameter used in min_distance mode, the amount of closest points that are being averaged to determine the distance to the detected object.
 
 ### The tracker
 The tracker has the following parameters, they can be changed in the `config/tracker.yaml`:
@@ -140,6 +145,4 @@ The code is articulated around 4 main classes:
 - The `Tracker` class, it tracks a wide variery of objects, 2D, 2D with rotation, and 3D. It comes with two companion classes:
     - The `KalmanFilter` class, a filter that is used to propagate the detections.
     - The `Object class`, a helper class, to store data relevant to the tracking.
-- The `Detection` class, it uses the previously introduced classes to detect, locate and track the objects.
-
-# 
+- The `Detection` class, it uses the previously introduced classes to detect, locate and track the objects. 
