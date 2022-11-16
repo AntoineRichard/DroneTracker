@@ -3,7 +3,7 @@ project(detect_and_track)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
-add_compile_options(-std=c++17 -O3 -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION -DDEBUG_TRACKER)
+add_compile_options(-std=c++17 -O3 -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION -DDEBUG_TRACKER -DPROFILE)
 
 ## Fastest compile options
 #add_compile_options(-std=c++17 -O3)
