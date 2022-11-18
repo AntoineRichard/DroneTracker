@@ -198,8 +198,9 @@ class BoundingBox {
         float area_;
         bool valid_ = true;
 
-        BoundingBox (float*, int&);
-        float calculateIOU (const BoundingBox&);
+        BoundingBox(float*, int&);
+        BoundingBox(const float&, const float&, const float&, const float&, const float&, const int&);
+        float calculateIOU(const BoundingBox&);
         void compareWith(BoundingBox&, const float);
 };
         

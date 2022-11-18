@@ -161,6 +161,20 @@ BoundingBox::BoundingBox(float* data, int& class_id) {
     area_ = data[2] * data[3];
 }
 
+BoundingBox::BoundingBox(const float& xmin, const float& ymin, const float& width, const float& height, const float& conf, const int& class_id) {
+    class_id_ =  class_id,
+    confidence_ = conf;
+    x_ = xmin + width/2;
+    y_ = ymin + height/2;
+    w_ = width;
+    h_ = height;
+    x_min_ = xmin;
+    x_max_ = xmin+width;
+    y_min_ = ymin;
+    y_max_ = ymin+height;
+    area_ = height*width;
+}
+
 
 float BoundingBox::calculateIOU(const BoundingBox& bbox) {
     const float x_min_new = std::max(x_min_, bbox.x_min_);
