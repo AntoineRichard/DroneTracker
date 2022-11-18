@@ -18,80 +18,10 @@
 #include <vector>
 #include <map>
 
-#include <detect_and_track/ObjectDetection.h>
-#include <detect_and_track/PoseEstimator.h>
 #include <detect_and_track/Tracker.h>
 #include <detect_and_track/utils.h>
 
 #include <opencv2/opencv.hpp>
-
-
-class Detect {
-  protected:
-    // Image parameters
-    int image_size_;
-    int image_rows_;
-    int image_cols_;
-    int padding_rows_;
-    int padding_cols_;
-    cv::Mat padded_image_;
-
-    //Profiling variables
-#ifdef PROFILE
-    std::chrono::time_point<std::chrono::system_clock> start_image_;
-    std::chrono::time_point<std::chrono::system_clock> end_image_;
-    std::chrono::time_point<std::chrono::system_clock> start_detection_;
-    std::chrono::time_point<std::chrono::system_clock> end_detection_;
-#endif
-
-    // Object detector parameters
-    int num_classes_;
-    std::vector<std::string> class_map_;
-
-    ObjectDetector* OD_;
-
-  public:
-    Detect();
-    Detect(GlobalParameters&, DetectionParameters&, NMSParameters&);
-    void buildDetect(GlobalParameters&, DetectionParameters&, NMSParameters&);
-    ~Detect();
-
-    void detectObjects(cv::Mat&, std::vector<std::vector<BoundingBox>>&);
-    void generateDetectionImage(cv::Mat&, const std::vector<std::vector<BoundingBox>>&);
-    void adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>&);
-    void padImage(cv::Mat&);
-    void printProfilingDetection();
-    void applyOnFolder(std::string, std::string, bool, bool, bool);
-    void applyOnVideo(std::string, std::string, bool, bool, bool);
-};
-
-
-class Locate {
-  protected:
-    //Profiling variables
-#ifdef PROFILE
-    std::chrono::time_point<std::chrono::system_clock> start_distance_;
-    std::chrono::time_point<std::chrono::system_clock> end_distance_;
-    std::chrono::time_point<std::chrono::system_clock> start_position_;
-    std::chrono::time_point<std::chrono::system_clock> end_position_;
-#endif
-
-    PoseEstimator* PE_;
-
-  public:
-    Locate();
-    Locate(GlobalParameters&, LocalizationParameters&, CameraParameters&);
-    void buildLocate(GlobalParameters&, LocalizationParameters&, CameraParameters&);
-    ~Locate();
-
-    void locate(const cv::Mat&, const std::vector<std::vector<BoundingBox>>&,
-                std::vector<std::vector<float>>&, std::vector<std::vector<std::vector<float>>>&);
-    void locate(const cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>&,
-                std::vector<std::map<unsigned int, float>>&, std::vector<std::map<unsigned int, std::vector<float>>>&);
-    void updateCameraInfo(const std::vector<float>&, const std::vector<float>&);
-    void printProfilingLocalization();
-};
-
 
 class Track2D {
   protected:
@@ -141,35 +71,3 @@ class Track2D {
     void generateTrackingImage(cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>);
     void printProfilingTracking();
 };
-
-
-class DetectAndLocate : public Detect, public Locate {
-  public:
-    DetectAndLocate();
-    DetectAndLocate(GlobalParameters&, DetectionParameters&, NMSParameters&,
-                    LocalizationParameters&, CameraParameters&);
-    void applyOnFolder(std::string, std::string, bool, bool, bool);
-    void applyOnVideo(std::string, std::string, bool, bool, bool);
-};
-
-
-class DetectAndTrack2D : public Detect, public Track2D {
-  public:
-    DetectAndTrack2D();
-    DetectAndTrack2D(GlobalParameters&, DetectionParameters&, NMSParameters&,
-                     KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
-    void applyOnFolder(std::string, std::string, bool, bool, bool);
-    void applyOnVideo(std::string, std::string, bool, bool, bool);
-};
-
-
-class DetectTrack2DAndLocate : public Detect, public Locate, public Track2D {
-  public:
-    DetectTrack2DAndLocate();
-    DetectTrack2DAndLocate(GlobalParameters&, DetectionParameters&, NMSParameters&,
-                           KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&,
-                           LocalizationParameters&, CameraParameters&);
-    void applyOnFolder(std::string, std::string, bool, bool, bool);
-    void applyOnVideo(std::string, std::string, bool, bool, bool);
-};
-#endif
