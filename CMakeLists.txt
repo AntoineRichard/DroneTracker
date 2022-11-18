@@ -76,6 +76,7 @@ add_library(ROSWrappers src/ROSWrappers.cpp)
 #add_executable(depth_extractor src/depth_extractor.cpp)
 add_executable(detect_node src/detect_node.cpp)
 add_executable(detect_and_locate_node src/detect_and_locate_node.cpp)
+add_executable(detect_and_track2D_node src/detect_and_track2D_node.cpp)
 add_executable(detect_track2D_and_locate_node src/detect_track2D_and_locate_node.cpp)
 
 
@@ -100,6 +101,21 @@ target_link_libraries(detect_node
 )
 
 target_link_libraries(detect_and_locate_node
+    ROSWrappers
+    ${catkin_LIBRARIES}
+    ${OpenCV_LIBS}
+    DetectionUtils    
+    Tracker
+    Hungarian
+    PoseEstimator
+    KalmanFilter
+    ObjectDetection
+    Utils
+    nvinfer
+    cudart
+)
+
+target_link_libraries(detect_and_track2D_node
     ROSWrappers
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
