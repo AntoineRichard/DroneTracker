@@ -45,7 +45,7 @@ class ROSDetect : public Detect {
     ~ROSDetect();
 };
 
-class ROSDetectAndLocate : public ROSDetect, public Locate {
+class ROSDetectAndLocate : public ROSDetect, public Locate { // Should be using virtual classes
   protected:
     image_transport::Subscriber depth_sub_;
     ros::Publisher pose_array_pub_;
@@ -73,8 +73,62 @@ class ROSDetectAndLocate : public ROSDetect, public Locate {
     ~ROSDetectAndLocate();
 };
 
-class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D {
+class ROSTrack2D : public Track2D {
   protected:
+    ros::NodeHandle nh_;
+    image_transport::ImageTransport it_;
+    image_transport::Subscriber image_sub_;
+    ros::Subscriber bboxes_sub_;
+    ros::Publisher bboxes_pub_;
+#ifdef PUBLISH_DETECTION_IMAGE   
+    image_transport::Publisher tracker_pub_;
+#endif
+    
+    // Image parameters
+    int num_classes_;
+    sensor_msgs::ImagePtr image_ptr_out_;
+    std_msgs::Header header_;
+    cv::Mat image_;
+
+    // dt update for Kalman 
+    float dt_;
+    ros::Time t1_;
+    ros::Time t2_;   
+    void ROSbboxes2bboxes(const detect_and_track::BoundingBoxes2DConstPtr&, std::vector<std::vector<BoundingBox>>&);
+    void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                          std_msgs::Header&);
+    void imageCallback(const sensor_msgs::ImageConstPtr&);
+    void bboxesCallback(const detect_and_track::BoundingBoxes2DConstPtr&);
+
+  public:
+    ROSTrack2D();
+    ~ROSTrack2D();
+};
+
+class ROSDetectAndTrack2D : public ROSDetect, public Track2D { // should be using virtual classes
+  protected:
+#ifdef PUBLISH_DETECTION_IMAGE   
+    image_transport::Publisher tracker_pub_;
+#endif
+
+    // dt update for Kalman 
+    float dt_;
+    ros::Time t1_;
+    ros::Time t2_;   
+
+    void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                          std_msgs::Header&);
+    virtual void imageCallback(const sensor_msgs::ImageConstPtr&) override;
+
+  public:
+    ROSDetectAndTrack2D();
+    ~ROSDetectAndTrack2D();
+};
+
+class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D { // should be using virtual classes
+  protected: 
 #ifdef PUBLISH_DETECTION_IMAGE   
     image_transport::Publisher tracker_pub_;
 #endif
