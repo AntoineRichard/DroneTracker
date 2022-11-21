@@ -53,6 +53,7 @@ catkin_package(
 #  DEPENDS system_lib
 )
 
+
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
@@ -67,7 +68,6 @@ add_library(Utils src/utils.cpp)
 add_library(ROSWrappers src/ROSWrappers.cpp)
 
 add_executable(track2D_node src/track2D_node.cpp)
-
 target_link_libraries(track2D_node
     ROSWrappers
     ${catkin_LIBRARIES}
@@ -78,3 +78,5 @@ target_link_libraries(track2D_node
     KalmanFilter
     Utils
 )
+add_dependencies(track2D_node detect_and_track_generate_messages_cpp)
+
