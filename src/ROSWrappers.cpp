@@ -42,11 +42,12 @@ ROSTrack2D::ROSTrack2D() : nh_("~"), it_(nh_), Track2D() {
   buildTrack2D(det_p, kal_p, tra_p, bbo_p);
 
   cv::Mat image_;
-
+  image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSTrack2D::imageCallback, this);
+  bboxes_sub_ = nh_.subscribe("bounding_boxes", 1, &ROSTrack2D::bboxesCallback, this);
 #ifdef PUBLISH_DETECTION_IMAGE
-  tracker_pub_ = it_.advertise("/detection/tracking", 1);
+  tracker_pub_ = it_.advertise("tracking_image", 1);
 #endif
-  bboxes_pub_ = nh_.advertise<detect_and_track::BoundingBoxes2D>("/detection/bounding_boxes", 1);
+  bboxes_pub_ = nh_.advertise<detect_and_track::BoundingBoxes2D>("tracking_bounding_boxes", 1);
 }
 
 ROSTrack2D::~ROSTrack2D(){}

@@ -10,5 +10,6 @@
 
   <node name="track2D" pkg="detect_and_track" type="track2D_node" output="screen">
     <remap from="/camera/color/image_raw" to="/camera01/color/image_raw"/>
+    <remap from="~/bounding_boxes" to="/object_detector/bounding_boxes"/>
   </node>
 </launch>
