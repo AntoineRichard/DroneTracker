@@ -71,3 +71,5 @@ class Track2D {
     void generateTrackingImage(cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>);
     void printProfilingTracking();
 };
+
+#endif

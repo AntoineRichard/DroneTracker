@@ -142,24 +142,3 @@ void Track2D::printProfilingTracking(){
   printf(" - Tracking done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking_ - start_tracking_).count());
 #endif
 }
-
-DetectAndLocate::DetectAndLocate() : Detect(), Locate(){}
-DetectAndLocate::DetectAndLocate(GlobalParameters& glo_p, DetectionParameters& det_p, NMSParameters& nms_p,
-      LocalizationParameters& loc_p, CameraParameters& cam_p) : Detect(glo_p, det_p, nms_p), Locate(glo_p, loc_p, cam_p){}
-void DetectAndLocate::applyOnFolder(std::string, std::string, bool, bool, bool) {}
-void DetectAndLocate::applyOnVideo(std::string, std::string, bool, bool, bool) {}
-
-DetectAndTrack2D::DetectAndTrack2D() : Detect(), Track2D(){}
-DetectAndTrack2D::DetectAndTrack2D(GlobalParameters& glo_p, DetectionParameters& det_p, NMSParameters& nms_p,
-      KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p) : Detect(glo_p,
-      det_p, nms_p), Track2D(det_p, kal_p, tra_p, bbo_p){}
-void DetectAndTrack2D::applyOnFolder(std::string, std::string, bool, bool, bool) {}
-void DetectAndTrack2D::applyOnVideo(std::string, std::string, bool, bool, bool) {}
-
-DetectTrack2DAndLocate::DetectTrack2DAndLocate() : Detect(), Track2D(), Locate(){}
-DetectTrack2DAndLocate::DetectTrack2DAndLocate(GlobalParameters& glo_p, DetectionParameters& det_p,
-      NMSParameters& nms_p, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p, 
-      LocalizationParameters& loc_p, CameraParameters& cam_p) : Detect(glo_p, det_p, nms_p), Track2D(det_p, kal_p, 
-      tra_p, bbo_p), Locate(glo_p, loc_p, cam_p){}
-void DetectTrack2DAndLocate::applyOnFolder(std::string, std::string, bool, bool, bool) {}
-void DetectTrack2DAndLocate::applyOnVideo(std::string, std::string, bool, bool, bool) {}
