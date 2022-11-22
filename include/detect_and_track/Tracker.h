@@ -17,8 +17,6 @@
 #include <map>
 #include <chrono>
 
-
-
 #include <detect_and_track/KalmanFilter.h>
 #include <detect_and_track/Hungarian.h>
 #include <stdio.h>
