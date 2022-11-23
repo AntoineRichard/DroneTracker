@@ -38,6 +38,7 @@ class ROSTrack2D : public Track2D {
     sensor_msgs::ImagePtr image_ptr_out_;
     std_msgs::Header header_;
     cv::Mat image_;
+    bool image_ok_;
 
     // dt update for Kalman 
     float dt_;

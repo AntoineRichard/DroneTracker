@@ -42,6 +42,7 @@ ROSTrack2D::ROSTrack2D() : nh_("~"), it_(nh_), Track2D() {
   buildTrack2D(det_p, kal_p, tra_p, bbo_p);
 
   cv::Mat image_;
+  image_ok_ = false;
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSTrack2D::imageCallback, this);
   bboxes_sub_ = nh_.subscribe("bounding_boxes", 1, &ROSTrack2D::bboxesCallback, this);
 #ifdef PUBLISH_DETECTION_IMAGE
@@ -135,8 +136,10 @@ void ROSTrack2D::bboxesCallback(const detect_and_track::BoundingBoxes2DConstPtr&
 #endif
 
 #ifdef PUBLISH_DETECTION_IMAGE
-  cv::Mat image_tracker = image_.clone();
-  publishTrackingImage(image_tracker, tracker_states);
+  if (image_ok_) {
+    cv::Mat image_tracker = image_.clone();
+    publishTrackingImage(image_tracker, tracker_states);
+  }
 #endif
   publishDetections(tracker_states, header_);
 }
@@ -157,4 +160,5 @@ void ROSTrack2D::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   image_ = cv_ptr->image;
   header_ = cv_ptr->header;
   cv::cvtColor(image_, image_, cv::COLOR_BGR2RGB);
+  image_ok_ = true;
 }
