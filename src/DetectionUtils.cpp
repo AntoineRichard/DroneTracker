@@ -37,12 +37,12 @@ Detect::~Detect() {}
 void Detect::padImage(cv::Mat& image) {
   float r;
   r = (float) image_size_ / std::max(image.rows, image.cols);
-  printf("DEBUG: %f\n",r);
+  //printf("DEBUG: %f\n",r);
   if (r != 1) {
     cv::resize(image, image, cv::Size(), r, r, cv::INTER_AREA);
     printf("Not implemented\n");
   }
-  printf("rows %d, cols%d\n", image.rows, image.cols);
+  //printf("rows %d, cols%d\n", image.rows, image.cols);
   padding_rows_ = (image_size_ - image.rows)/2;
   padding_cols_ = (image_size_ - image.cols)/2;
   image.copyTo(padded_image_(cv::Range(padding_rows_,padding_rows_+image.rows),cv::Range(padding_cols_,padding_cols_+image.cols)));
@@ -254,7 +254,7 @@ void Track2D::cast2states(std::vector<std::vector<std::vector<float>>>& states, 
       state[4] = bboxes[i][j].w_;
       state[5] = bboxes[i][j].h_;
       state_vec.push_back(state);
-      printf("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", j, state[0], state[1], state[2], state[3], state[4], state[5]);
+      //printf("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\", j, state[0], state[1], state[2], state[3], state[4], state[5]);
     }
     states.push_back(state_vec);
   }
