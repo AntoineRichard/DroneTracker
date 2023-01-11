@@ -81,10 +81,12 @@ PoseEstimator::PoseEstimator(float rejection_threshold, float keep_threshold, in
     distortion_model_ = 0;
   }
 
-  if (position_mode == "pin_hole") {
+  if (position_mode == "min_distance") {
     position_mode_ = 0;
-  } else if (position_mode == "plumb_blob") {
+  } else if (position_mode == "center") {
     position_mode_ = 1;
+  } else if (position_mode == "average_min_distance") {
+    position_mode_ = 2;
   } else {
     position_mode_ = 0;
   }
@@ -164,10 +166,10 @@ PoseEstimator::PoseEstimator(GlobalParameters& glo_p, LocalizationParameters& lo
  * @param lens_parameters The reference to the plumb-blob model parameters.
  */
 void PoseEstimator::updateCameraParameters(const std::vector<float>& camera_parameters, const std::vector<float>& lens_parameters) {
-  cx_ = camera_parameters[0];
-  cy_ = camera_parameters[1];
-  fx_ = camera_parameters[2];
-  fy_ = camera_parameters[3];
+  fx_ = camera_parameters[0];
+  fy_ = camera_parameters[1];
+  cx_ = camera_parameters[2];
+  cy_ = camera_parameters[3];
   fx_inv_ = 1/fx_;
   fy_inv_ = 1/fy_;
   K_ = lens_parameters;
@@ -305,9 +307,11 @@ void PoseEstimator::distancePixel2PointBrownConrady(const float& dist, const std
 /**
  * @brief Computes the distance between an object and the camera.
  * @details Computes the distance between an object and the camera.
- * To do so, we first calculate the distance between every point inside the bounding box and the camera.
- * Then, the 5% closest points are removed as considered as potential outliers (too close, noise in the camera).
- * Of the remaining points, the 10% smallest are then averaged to get the distance to the object. 
+ * Selects the method to compute the distance using user input.
+ * There are currently 3 options:
+ *  - getMinDistance
+ *  - getAverageMinDistance
+ *  - getCenterDistance
  * 
  * @param depth_image The reference to the depth image to compute the distance from.
  * @param x_min The reference to the position of the bounding box's left side.
@@ -316,20 +320,47 @@ void PoseEstimator::distancePixel2PointBrownConrady(const float& dist, const std
  * @param height The reference to the height of the bounding box.
  * @return The distance to the object.
  */
-float PoseEstimator::getDistance(const cv::Mat& depth_image, const float& x_min, const float& y_min, const float& width, const float& height ) {
-  float z, d;
+float PoseEstimator::getDistance(const cv::Mat& depth_image, const int& x_min, const int& y_min, const int& width, const int& height) {
+  float distance;
+  if (position_mode_ == 0) {
+    distance = getMinDistance(depth_image, x_min, y_min, width, height);
+  } else if (position_mode_ == 1) {
+    distance = getMinAverageDistance(depth_image, x_min, y_min, width, height);
+  } else if (position_mode_ == 2) {
+    distance = getCenterDistance(depth_image, x_min, y_min, width, height);
+  }
+  return distance;
+}
+
+/**
+ * @brief Computes the distance between an object and the camera.
+ * @details Computes the distance between an object and the camera.
+ * To do so, we first calculate the distance between every point inside the bounding box and the camera.
+ * Then, we look for the closest points and use it as the distance to the object.
+ * This method can be usefull for thin objects with large foot prints such as drones.
+ * With drones the center of the bounding box rarely lands on the drone itself,
+ * and averaging the N% closest points can lead to selecting points that belong to a wall or else.
+ * 
+ * @param depth_image The reference to the depth image to compute the distance from.
+ * @param x_min The reference to the position of the bounding box's left side.
+ * @param y_min The reference to the position of the bounding box's top side.
+ * @param width The reference to the width of the bounding box.
+ * @param height The reference to the height of the bounding box.
+ * @return The distance to the object.
+ */
+float PoseEstimator::getMinDistance(const cv::Mat& depth_image, const int& x_min, const int& y_min, const int& width, const int& height ) {
+  float z, d, distance;
   size_t reject, keep;
-  std::vector<float> distances(height*width, 0);
+  std::vector<float> distances((int) (height*width), 0);
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
-
   unsigned int c = 0;
-  for (int row = (int) y_min; row < (int) y_min + height; row++) {
-    for (int col = (int) x_min; col < (int) x_min + width; col++) {
+  for (int col = x_min; col < (x_min + width); col++) {
+    for (int row = y_min; row < (y_min + height); row++) {
       z = depth_image.at<float>(row, col);
-      if (z != 0) {
-        pixel[0] = row;
-        pixel[1] = col;
+      if ((z > 0.3) && (z < 10.0)) { // TODO: These values could be parameters.
+        pixel[0] = (float) col;
+        pixel[1] = (float) row;
         if (distortion_model_ == 1) {
           deprojectPixel2PointBrownConrady(z, pixel, point);
         } else {
@@ -341,10 +372,85 @@ float PoseEstimator::getDistance(const cv::Mat& depth_image, const float& x_min,
       }
     }
   }
-  reject = distances.size() * rejection_threshold_;
-  keep = distances.size() * keep_threshold_;
-  std::sort(distances.begin(), distances.end(), std::less<float>());
-  return std::accumulate(distances.begin() + reject, distances.begin() + reject+keep,0.0) / keep;
+  std::vector<float> short_distances(distances.begin(), distances.begin() + c);
+  return *std::min_element(short_distances.begin(), short_distances.end());
+}
+
+/**
+ * @brief Computes the distance between an object and the camera.
+ * @details Computes the distance between an object and the camera.
+ * To do so, we first calculate the distance between every point inside the bounding box and the camera.
+ * Then, the 5% closest points are removed as considered as potential outliers (too close, noise in the camera).
+ * Of the remaining points, the 10% smallest are then averaged to get the distance to the object. 
+ * 
+ * @param depth_image The reference to the depth image to compute the distance from.
+ * @param x_min The reference to the position of the bounding box's left side.
+ * @param y_min The reference to the position of the bounding box's top side.
+ * @param width The reference to the width of the bounding box.
+ * @param height The reference to the height of the bounding box.
+ * @return The distance to the object.
+ */
+float PoseEstimator::getMinAverageDistance(const cv::Mat& depth_image, const int& x_min, const int& y_min, const int& width, const int& height ) {
+  float z, d, distance;
+  size_t reject, keep;
+  std::vector<float> distances((int) (height*width), 0);
+  std::vector<float> point(3,0);
+  std::vector<float> pixel(2,0);
+  unsigned int c = 0;
+
+  for (int col = x_min; col < (x_min + width); col++) {
+    for (int row = y_min; row < (y_min + height); row++) {
+      z = depth_image.at<float>(row, col);
+      if ((z > 0.3) && (z < 10.0)) {
+        pixel[0] = (float) col;
+        pixel[1] = (float) row;
+        if (distortion_model_ == 1) {
+          deprojectPixel2PointBrownConrady(z, pixel, point);
+        } else {
+          deprojectPixel2PointPinHole(z, pixel, point);
+        }
+        d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
+        distances[c] = d;
+        c++;
+      }
+    }
+  }
+  std::vector<float> short_distances(distances.begin(), distances.begin() + c);
+  reject = short_distances.size() * rejection_threshold_;
+  keep = short_distances.size() * keep_threshold_;
+  std::sort(short_distances.begin(), short_distances.end(), std::less<float>());
+  return std::accumulate(short_distances.begin() + reject, short_distances.begin() + reject+keep, 0.0)/keep;
+}
+
+/**
+ * @brief Computes the distance between an object and the camera.
+ * @details Computes the distance between an object and the camera.
+ * To do so, we first use the distance measured at the center of the object.
+ * 
+ * @param depth_image The reference to the depth image to compute the distance from.
+ * @param x_min The reference to the position of the bounding box's left side.
+ * @param y_min The reference to the position of the bounding box's top side.
+ * @param width The reference to the width of the bounding box.
+ * @param height The reference to the height of the bounding box.
+ * @return The distance to the object.
+ */
+float PoseEstimator::getCenterDistance(const cv::Mat& depth_image, const int& x_min, const int& y_min, const int& width, const int& height ) {
+  float z, d;
+  int col, row;
+  std::vector<float> point(3,0);
+  std::vector<float> pixel(2,0);
+  col = x_min + width / 2;
+  row = y_min + height / 2;
+  z = depth_image.at<float>(col, row);
+  pixel[0] = (float) col;
+  pixel[1] = (float) row;
+  if (distortion_model_ == 1) {
+    deprojectPixel2PointBrownConrady(z, pixel, point);
+  } else {
+    deprojectPixel2PointPinHole(z, pixel, point);
+  }
+  d = sqrt(point[0]*point[0] + point[1]*point[1] + point[2]*point[2]);
+  return d;
 }
 
 /**
@@ -362,6 +468,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
 
   // If the image does not exist, return -1 as distance.
   if (depth_image.empty()) {
+#ifdef DEBUG_POSE
+    printf("\e[1;31m[DEBUG  ]\e[0m PoseEstimator::%s::l%d - Depth image hasn't been received yet. Setting distance to -1.\n", __func__, __LINE__);
+#endif
     for (unsigned int i=0; i < bboxes.size(); i++) {
       distance_vector.clear();
       for (unsigned int j=0; j < bboxes[i].size(); j++) {
@@ -384,6 +493,9 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
 #endif
       // If the bounding box is invalid use -1 as distance.
       if (!bboxes[i][j].valid_) {
+#ifdef DEBUG_POSE
+        printf("\e[1;33m[DEBUG  ]\e[0m PoseEstimator::%s::l%d - Bounding box is invalid, setting distance to -1.\n", __func__, __LINE__);
+#endif
         distance_vector.push_back(-1);
 #ifdef PROFILE
         auto end_distance = std::chrono::system_clock::now();
@@ -391,7 +503,7 @@ std::vector<std::vector<float>> PoseEstimator::extractDistanceFromDepth(const cv
 #endif
         continue;
       }
-      distance_vector.push_back(getDistance(depth_image, bboxes[i][j].x_min_, bboxes[i][j].y_min_, bboxes[i][j].w_, bboxes[i][j].h_ ));
+      distance_vector.push_back(getDistance(depth_image, (int) bboxes[i][j].x_min_, (int) bboxes[i][j].y_min_, (int) bboxes[i][j].w_, (int) bboxes[i][j].h_ ));
 #ifdef PROFILE
       auto end_distance = std::chrono::system_clock::now();
       printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance time %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
@@ -416,11 +528,14 @@ std::vector<std::map<unsigned int, float>> PoseEstimator::extractDistanceFromDep
   std::vector<float> distances;
   std::vector<float> point(3,0);
   std::vector<float> pixel(2,0);
-  float z, d;
+  float z, d, dist;
   int rows, cols;
 
   // If the image does not exist, return -1 as distance.
   if (depth_image.empty()) {
+#ifdef DEBUG_POSE
+    printf("\e[1;33m[DEBUG  ]\e[0m PoseEstimator::%s::l%d - Depth image hasn't been received yet. Setting distance to -1.\n", __func__, __LINE__);
+#endif
     for (unsigned int i=0; i < tracked_states.size(); i++) {
       for (auto & element : tracked_states[i]) {
         distance_maps[i].insert(std::pair(element.first, -1));
@@ -435,10 +550,14 @@ std::vector<std::map<unsigned int, float>> PoseEstimator::extractDistanceFromDep
 #ifdef PROFILE
     auto start_distance = std::chrono::system_clock::now();
 #endif
-      distance_maps[i].insert(std::pair(element.first, getDistance(depth_image, element.second[0], element.second[1], element.second[4], element.second[5])));
+    dist = getDistance(depth_image, (int) element.second[0], (int) element.second[1], (int) element.second[4], (int) element.second[5]);
+    distance_maps[i].insert(std::pair(element.first, dist));
 #ifdef PROFILE
       auto end_distance = std::chrono::system_clock::now();
       printf("\e[1;34m[PROFILE]\e[0m PoseEstimator::%s::l%d - Obj %d distance time %ld us\n", __func__, __LINE__,  i, std::chrono::duration_cast<std::chrono::microseconds>(end_distance - start_distance).count());
+#endif
+#ifdef DEBUG_POSE
+      printf("\e[1;33m[DEBUG  ]\e[0m PoseEstimator::%s::l%d - Distance of tracked object %d is %.3f.\n", __func__, __LINE__, element.first, dist);
 #endif
     }
   }

@@ -65,7 +65,10 @@ class PoseEstimator {
     void deprojectPixel2PointBrownConrady(const float&, const std::vector<float>&, std::vector<float>&);
     void deprojectPixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
     void distancePixel2PointBrownConrady(const float&, const std::vector<float>&, std::vector<float>&);
-    float getDistance(const cv::Mat&, const float&, const float&, const float&, const float&);
+    float getDistance(const cv::Mat&, const int&, const int&, const int&, const int&);
+    float getMinDistance(const cv::Mat&, const int&, const int&, const int&, const int&);
+    float getMinAverageDistance(const cv::Mat&, const int&, const int&, const int&, const int&);
+    float getCenterDistance(const cv::Mat&, const int&, const int&, const int&, const int&);
     void distancePixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
     void projectPixel2PointPinHole(const float&, const float&, const float&, float&, float&);
     void updateCameraParameters(const std::vector<float>&, const std::vector<float>&);
