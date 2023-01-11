@@ -133,9 +133,6 @@ class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D { //
     image_transport::Publisher tracker_pub_;
 #endif
 
-    // Image parameters
-    cv::Mat depth_image_;
-
     // dt update for Kalman 
     float dt_;
     ros::Time t1_;
