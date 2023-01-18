@@ -14,16 +14,16 @@ ROSDetect::ROSDetect() : nh_("~"), it_(nh_), Detect() {
   GlobalParameters glo_p;
   DetectionParameters det_p;
   NMSParameters nms_p;
+
   // Global parameters
   nh_.param("image_rows", glo_p.image_height, 480);
   nh_.param("image_cols", glo_p.image_width, 640);
   // NMS parameters
-  nh_.param("nms_tresh", nms_p.nms_thresh,0.45f);
-  nh_.param("conf_tresh", nms_p.conf_thresh,0.25f);
+  nh_.param("nms_thresh", nms_p.nms_thresh,0.45f);
+  nh_.param("conf_thresh", nms_p.conf_thresh,0.25f);
   nh_.param("max_output_bbox_count", nms_p.max_output_bbox_count, 1000);
   // Model parameters
-  std::string default_path_to_engine("None2");
-  std::string path_to_engine;
+  std::string default_path_to_engine("None");
   std::vector<std::string> default_class_map {std::string("object")};
   nh_.param("path_to_engine", det_p.engine_path, default_path_to_engine);
   nh_.param("num_classes", det_p.num_classes, 1);
@@ -31,6 +31,7 @@ ROSDetect::ROSDetect() : nh_("~"), it_(nh_), Detect() {
   nh_.param("num_buffers", det_p.num_buffers, 2);
   // Initializes the detector
   buildDetect(glo_p, det_p, nms_p);
+
   // Creates the subscribers and publishers
   image_sub_ = it_.subscribe("/camera/color/image_raw", 1, &ROSDetect::imageCallback, this);
 #ifdef PUBLISH_DETECTION_IMAGE
@@ -152,7 +153,7 @@ ROSDetectAndLocate::ROSDetectAndLocate() : ROSDetect(), Locate() {
   nh_.param("camera_parameters", cam_p.camera_parameters, P);
   nh_.param("K", cam_p.lens_distortion, K);
   nh_.param("lens_distortion_model", cam_p.distortion_model, distortion_model);
-
+  // Initialize the position estimator
   buildLocate(glo_p, loc_p, cam_p);
   
   depth_sub_ = it_.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &ROSDetectAndLocate::depthCallback, this);
@@ -351,7 +352,6 @@ ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), T
   BBoxRejectionParameters bbo_p;
   // Model parameters
   std::string default_path_to_engine("None");
-  std::string path_to_engine;
   std::vector<std::string> default_class_map {std::string("object")};
   nh_.param("path_to_engine", det_p.engine_path, default_path_to_engine);
   nh_.param("num_classes", det_p.num_classes, 1);
@@ -376,8 +376,8 @@ ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), T
   // BBox rejection
   nh_.param("min_bbox_width", bbo_p.min_bbox_width, 60);
   nh_.param("max_bbox_width", bbo_p.max_bbox_width, 400);
-  nh_.param("min_bbox_width", bbo_p.min_bbox_height, 60);
-  nh_.param("max_bbox_width", bbo_p.max_bbox_height, 300);
+  nh_.param("min_bbox_height", bbo_p.min_bbox_height, 60);
+  nh_.param("max_bbox_height", bbo_p.max_bbox_height, 300);
   buildTrack2D(det_p, kal_p, tra_p, bbo_p);
 
 #ifdef PUBLISH_DETECTION_IMAGE
@@ -491,6 +491,7 @@ void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned i
                                                  std_msgs::Header& header) {
   geometry_msgs::PoseArray pose_array;
   geometry_msgs::Pose pose;
+  std::vector<geometry_msgs::Pose> poses;
   for (unsigned int i=0; i<points.size(); i++) {
     for (auto & element : points[i]) {
       pose.position.x = element.second[0];

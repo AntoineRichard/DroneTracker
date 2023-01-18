@@ -16,6 +16,7 @@
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/Image.h>
 #include <image_transport/image_transport.h>
 #include <std_msgs/Header.h>
 #include <geometry_msgs/PoseArray.h>
@@ -34,9 +35,9 @@ class ROSDetect : public Detect {
     ros::Publisher bboxes_pub_;
 
     // Image parameters
-    sensor_msgs::ImagePtr image_ptr_out_;
+    sensor_msgs::Image::Ptr image_ptr_out_;
 
-    virtual void imageCallback(const sensor_msgs::ImageConstPtr&);
+    virtual void imageCallback(const sensor_msgs::Image::ConstPtr&);
     void publishDetectionImage(cv::Mat&, std::vector<std::vector<BoundingBox>>&);
     void publishDetections(std::vector<std::vector<BoundingBox>>&, std_msgs::Header&);
 
@@ -62,9 +63,9 @@ class ROSDetectAndLocate : public ROSDetect, public Locate { // Should be using 
     // Image parameters
     cv::Mat depth_image_;
 
-    virtual void imageCallback(const sensor_msgs::ImageConstPtr&) override;
+    virtual void imageCallback(const sensor_msgs::Image::ConstPtr&) override;
     void depthInfoCallback(const sensor_msgs::CameraInfoConstPtr&);
-    void depthCallback(const sensor_msgs::ImageConstPtr&);
+    void depthCallback(const sensor_msgs::Image::ConstPtr&);
     void publishDetectionsAndPositions(std::vector<std::vector<BoundingBox>>&, std::vector<std::vector<std::vector<float>>>&, std_msgs::Header&);
     void publishPositions(std::vector<std::vector<BoundingBox>>&, std::vector<std::vector<std::vector<float>>>&, std_msgs::Header&);
 
@@ -86,7 +87,7 @@ class ROSTrack2D : public Track2D {
     
     // Image parameters
     int num_classes_;
-    sensor_msgs::ImagePtr image_ptr_out_;
+    sensor_msgs::Image::Ptr image_ptr_out_;
     std_msgs::Header header_;
     cv::Mat image_;
 
@@ -94,12 +95,12 @@ class ROSTrack2D : public Track2D {
     float dt_;
     ros::Time t1_;
     ros::Time t2_;   
-    void ROSbboxes2bboxes(const detect_and_track::BoundingBoxes2DConstPtr&, std::vector<std::vector<BoundingBox>>&);
+    void ROSbboxes2bboxes(const detect_and_track::BoundingBoxes2D::ConstPtr&, std::vector<std::vector<BoundingBox>>&);
     void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
     void publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>&,
                           std_msgs::Header&);
-    void imageCallback(const sensor_msgs::ImageConstPtr&);
-    void bboxesCallback(const detect_and_track::BoundingBoxes2DConstPtr&);
+    void imageCallback(const sensor_msgs::Image::ConstPtr&);
+    void bboxesCallback(const detect_and_track::BoundingBoxes2D::ConstPtr&);
 
   public:
     ROSTrack2D();
@@ -120,7 +121,7 @@ class ROSDetectAndTrack2D : public ROSDetect, public Track2D { // should be usin
     void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
     void publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>&,
                           std_msgs::Header&);
-    virtual void imageCallback(const sensor_msgs::ImageConstPtr&) override;
+    virtual void imageCallback(const sensor_msgs::Image::ConstPtr&) override;
 
   public:
     ROSDetectAndTrack2D();
@@ -146,7 +147,7 @@ class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D { //
                           std_msgs::Header&);
     void publishPositions(std::vector<std::map<unsigned int, std::vector<float>>>&,
                           std_msgs::Header&);
-    virtual void imageCallback(const sensor_msgs::ImageConstPtr&) override;
+    virtual void imageCallback(const sensor_msgs::Image::ConstPtr&) override;
 
   public:
     ROSDetectTrack2DAndLocate();
