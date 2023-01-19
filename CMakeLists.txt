@@ -19,6 +19,7 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(image_transport REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -87,14 +88,15 @@ add_executable(track2D_node src/track2D_node.cpp)
 
 target_link_libraries(detect_node
     ROS2Wrappers
-    cv_bridge
-    rclcpp
-    sensor_msgs
-    geometry_msgs
-    std_msgs
-    rosidl_default_generators
-    tf2
-    tf2_geometry_msgs
+    ${cv_bridge_LIBRARIES}
+    ${rclcpp_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${std_msgs_LIBRARIES}
+    ${rosidl_default_generators_LIBRARIES}
+    ${image_transport_LIBRARIES}
+    ${tf2_LIBRARIES}
+    ${tf2_geometry_msgs_LIBRARIES}
     ${OpenCV_LIBS}
     DetectionUtils    
     Tracker
@@ -109,14 +111,15 @@ target_link_libraries(detect_node
 
 target_link_libraries(detect_and_locate_node
     ROS2Wrappers
-    cv_bridge
-    rclcpp
-    sensor_msgs
-    geometry_msgs
-    std_msgs
-    rosidl_default_generators
-    tf2
-    tf2_geometry_msgs
+    ${cv_bridge_LIBRARIES}
+    ${rclcpp_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${std_msgs_LIBRARIES}
+    ${rosidl_default_generators_LIBRARIES}
+    ${image_transport_LIBRARIES}
+    ${tf2_LIBRARIES}
+    ${tf2_geometry_msgs_LIBRARIES}
     ${OpenCV_LIBS}
     DetectionUtils    
     Tracker
@@ -131,14 +134,15 @@ target_link_libraries(detect_and_locate_node
 
 target_link_libraries(track2D_node
     ROS2Wrappers
-    cv_bridge
-    rclcpp
-    sensor_msgs
-    geometry_msgs
-    std_msgs
-    rosidl_default_generators
-    tf2
-    tf2_geometry_msgs
+    ${cv_bridge_LIBRARIES}
+    ${rclcpp_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${std_msgs_LIBRARIES}
+    ${rosidl_default_generators_LIBRARIES}
+    ${image_transport_LIBRARIES}
+    ${tf2_LIBRARIES}
+    ${tf2_geometry_msgs_LIBRARIES}
     ${OpenCV_LIBS}
     DetectionUtils    
     Tracker
@@ -153,14 +157,15 @@ target_link_libraries(track2D_node
 
 target_link_libraries(detect_and_track2D_node
     ROS2Wrappers
-    cv_bridge
-    rclcpp
-    sensor_msgs
-    geometry_msgs
-    std_msgs
-    rosidl_default_generators
-    tf2
-    tf2_geometry_msgs
+    ${cv_bridge_LIBRARIES}
+    ${rclcpp_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${std_msgs_LIBRARIES}
+    ${rosidl_default_generators_LIBRARIES}
+    ${image_transport_LIBRARIES}
+    ${tf2_LIBRARIES}
+    ${tf2_geometry_msgs_LIBRARIES}
     ${OpenCV_LIBS}
     DetectionUtils    
     Tracker
@@ -175,14 +180,15 @@ target_link_libraries(detect_and_track2D_node
 
 target_link_libraries(detect_track2D_and_locate_node
     ROS2Wrappers
-    cv_bridge
-    rclcpp
-    sensor_msgs
-    geometry_msgs
-    std_msgs
-    rosidl_default_generators
-    tf2
-    tf2_geometry_msgs
+    ${cv_bridge_LIBRARIES}
+    ${rclcpp_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${std_msgs_LIBRARIES}
+    ${rosidl_default_generators_LIBRARIES}
+    ${image_transport_LIBRARIES}
+    ${tf2_LIBRARIES}
+    ${tf2_geometry_msgs_LIBRARIES}
     ${OpenCV_LIBS}
     DetectionUtils    
     Tracker
