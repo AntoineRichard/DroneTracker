@@ -1,4 +1,5 @@
 # Object detection and tracking
+![OS](https://img.shields.io/badge/OS-Ubuntu_20.04-orange.svg) ![ROS2_FOXY](https://img.shields.io/badge/ROS2-Foxy-brightgreen.svg) ![VERSION](https://img.shields.io/badge/Detect&Track-0.9-lightgrey.svg)
 
 This repository enables the detection and tracking of objects on machines equipped with Nvidia GPUs.
 The code is written in C++ 17, enabling running networks such as Yolov5 without python3 installed.
