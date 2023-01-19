@@ -9,7 +9,7 @@
  * of the original image.
  * 
  */
-ROSDetect::ROSDetect() : Node("Detector"), Detect() {
+ROSDetect::ROSDetect() : Detect(), Node("Detector") {
   // Empty structs
   GlobalParameters glo_p;
   DetectionParameters det_p;
@@ -39,9 +39,9 @@ ROSDetect::ROSDetect() : Node("Detector"), Detect() {
   // Initializes the detector
   // Creates the subscribers and publishers
   buildDetect(glo_p, det_p, nms_p);
-  image_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/camera/color/image_raw", 1, std::bind(&ROSDetect::imageCallback, this, 1));
+  image_sub_ = image_transport::create_subscription(this, "/camera/color/image_raw", image_transport::Subscriber::Callback(std::bind(&ROSDetect::imageCallback, this, std::placeholders::_1)),"raw", rmw_qos_profile_sensor_data);
 #ifdef PUBLISH_DETECTION_IMAGE
-  detection_pub_ = this->create_publisher<sensor_msgs::msg::Image>("detection_image", 1);
+  detection_pub_ = image_transport::create_publisher(this, "detection_image", rmw_qos_profile_sensor_data);
 #endif
   bboxes_pub_ = this->create_publisher<detect_and_track::msg::BoundingBoxes2D>("bounding_boxes", 1);
 }
@@ -57,12 +57,14 @@ ROSDetect::~ROSDetect() {
  * @param bboxes 
  */
 void ROSDetect::publishDetectionImage(cv::Mat& image, std::vector<std::vector<BoundingBox>>& bboxes) {
+#ifdef PUBLISH_DETECTION_IMAGE
   generateDetectionImage(image, bboxes);
   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
   std_msgs::msg::Header image_ptr_out_header;
   image_ptr_out_header.stamp = this->now();
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image).toImageMsg();
   detection_pub_.publish(image_ptr_out_);
+#endif
 }
 
 /**
@@ -97,7 +99,7 @@ void ROSDetect::publishDetections(std::vector<std::vector<BoundingBox>>& bboxes,
   ros_bboxes.header.frame_id = header.frame_id;
   ros_bboxes.bboxes = vec_ros_bboxes;
 
-  bboxes_pub_.publish(ros_bboxes);
+  bboxes_pub_->publish(ros_bboxes);
 }
 
 /**
@@ -106,7 +108,7 @@ void ROSDetect::publishDetections(std::vector<std::vector<BoundingBox>>& bboxes,
  * 
  * @param msg 
  */
-void ROSDetect::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
+void ROSDetect::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
 #endif
@@ -114,7 +116,7 @@ void ROSDetect::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
   } catch (cv_bridge::Exception &e) {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     return;
   }
   cv::Mat image = cv_ptr->image;
@@ -158,22 +160,24 @@ ROSDetectAndLocate::ROSDetectAndLocate() : ROSDetect(), Locate() {
   this->get_parameter("position_mode", loc_p.mode);
   // Camera parameters
   std::string distortion_model("pin_hole");
-  std::vector<float> P(5,0);
-  std::vector<float> K(5,0);
+  std::vector<double> P(5,0);
+  std::vector<double> K(5,0);
   this->declare_parameter<std::string>("lens_distortion_model", "pin_hole");
-  this->declare_parameter<std::vector<float>>("camera_parameters", P);
-  this->declare_parameter<std::vector<float>>("K", K);
-  this->get_parameter("camera_parameters", cam_p.camera_parameters);
-  this->get_parameter("K", cam_p.lens_distortion);
-  this->get_parameter("lens_distortion_model", cam_p.lens_distortion);
+  this->declare_parameter<std::vector<double>>("camera_parameters", P);
+  this->declare_parameter<std::vector<double>>("K", K);
+  this->get_parameter("camera_parameters", P);
+  this->get_parameter("K", K);
+  std::copy(P.begin(), P.end(), back_inserter(cam_p.camera_parameters));
+  std::copy(K.begin(), K.end(), back_inserter(cam_p.lens_distortion));
+  this->get_parameter("lens_distortion_model", cam_p.distortion_model);
   // Initialize the position estimator
   buildLocate(glo_p, loc_p, cam_p);
   
-  depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/camera/aligned_depth_to_color/image_raw", 1, std::bind(&ROSDetectAndLocate::depthCallback, this, 1));
-  depth_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>("/camera/aligned_depth_to_color/camera_info", 1, std::bind(&ROSDetectAndLocate::depthInfoCallback, this, 1));
+  depth_sub_ = image_transport::create_subscription(this, "/camera/aligned_depth_to_color/image_raw", image_transport::Subscriber::Callback(std::bind(&ROSDetectAndLocate::depthCallback, this, std::placeholders::_1)),"raw", rmw_qos_profile_sensor_data);
+  depth_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>("/camera/aligned_depth_to_color/camera_info", 1, std::bind(&ROSDetectAndLocate::depthInfoCallback, this, std::placeholders::_1));
   pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("detection_pose_array", 1);
 #ifdef PUBLISH_DETECTION_WITH_POSITION
-  positions_bboxes_pub_ = this->create_publisher<detect_and_track::msg::PositionBoundingBoxes2DArray>("bounding_boxes_with_positions", 1);
+  positions_bboxes_pub_ = this->create_publisher<detect_and_track::msg::PositionBoundingBox2DArray>("bounding_boxes_with_positions", 1);
 #else
   positions_pub_ = this->create_publisher<detect_and_track::msg::PositionIDArray>("detection_positions", 1);
 #endif
@@ -188,9 +192,9 @@ ROSDetectAndLocate::~ROSDetectAndLocate() {
  * @param msg 
  */
 void ROSDetectAndLocate::depthInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg){
-  std::vector<double> P{msg->K[2], msg->K[5], msg->K[0], msg->K[4]};
-  std::vector<float> Pf(msg->P.begin(), msg->P.end());
-  std::vector<float> K(msg->D.begin(), msg->D.end());
+  std::vector<double> P{msg->k[0], msg->k[4], msg->k[2], msg->k[5]};
+  std::vector<float> Pf(msg->p.begin(), msg->p.end());
+  std::vector<float> K(msg->d.begin(), msg->d.end());
   updateCameraInfo(Pf, K);
 }
 
@@ -199,13 +203,13 @@ void ROSDetectAndLocate::depthInfoCallback(const sensor_msgs::msg::CameraInfo::S
  * 
  * @param msg 
  */
-void ROSDetectAndLocate::depthCallback(const sensor_msgs::msg::Image::SharedPtr msg){
+void ROSDetectAndLocate::depthCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg){
   cv_bridge::CvImagePtr cv_ptr;
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1);
   }
   catch (cv_bridge::Exception& e) {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     return;
   }
   cv_ptr->image.convertTo(depth_image_, CV_32F, 0.001);
@@ -257,8 +261,8 @@ void ROSDetectAndLocate::publishDetectionsAndPositions(std::vector<std::vector<B
   pose_array.header = ros_bboxes.header;
   pose_array.poses = poses;
   
-  positions_bboxes_pub_.publish(ros_bboxes);
-  pose_array_pub_.publish(pose_array);
+  positions_bboxes_pub_->publish(ros_bboxes);
+  pose_array_pub_->publish(pose_array);
 }
 
 #else
@@ -306,8 +310,8 @@ void ROSDetectAndLocate::publishPositions(std::vector<std::vector<BoundingBox>>&
   pose_array.header = id_positions.header;
   pose_array.poses = poses;
   
-  positions_pub_.publish(id_positions);
-  pose_array_pub_.publish(pose_array);
+  positions_pub_->publish(id_positions);
+  pose_array_pub_->publish(pose_array);
 }
 #endif
 
@@ -316,7 +320,7 @@ void ROSDetectAndLocate::publishPositions(std::vector<std::vector<BoundingBox>>&
  * 
  * @param msg 
  */
-void ROSDetectAndLocate::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg){
+void ROSDetectAndLocate::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg){
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
 #endif
@@ -324,7 +328,7 @@ void ROSDetectAndLocate::imageCallback(const sensor_msgs::msg::Image::SharedPtr 
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
   } catch (cv_bridge::Exception &e) {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     return;
   }
   cv::Mat image = cv_ptr->image;
@@ -374,18 +378,18 @@ ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), T
   this->get_parameter("class_map", det_p.class_map);
   this->get_parameter("num_buffers", det_p.num_buffers);
   // Kalman parameters
-  std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
-  std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
+  std::vector<double> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
+  std::vector<double> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
   Q_.resize(6);
   R_.resize(6);
-  this->declare_parameter<std::vector<float>>("Q", default_Q);
-  this->declare_parameter<std::vector<float>>("R", default_R);
+  this->declare_parameter<std::vector<double>>("Q", default_Q);
+  this->declare_parameter<std::vector<double>>("R", default_R);
   this->declare_parameter<bool>("use_vel", false);
   this->declare_parameter<bool>("use_dim", true);
-  this->get_parameter("Q", kal_p.Q);
-  this->get_parameter("R", kal_p.R);
-  this->get_parameter("use_vel", kal_p.use_vel);
-  this->get_parameter("use_dim", kal_p.use_dim);
+  this->get_parameter("Q", default_Q);
+  this->get_parameter("R", default_R);
+  std::copy(default_Q.begin(), default_Q.end(), back_inserter(kal_p.Q));
+  std::copy(default_R.begin(), default_R.end(), back_inserter(kal_p.R));
   // Tracking parameters
   this->declare_parameter<float>("center_threshold", 80.0f);
   this->declare_parameter<float>("dist_threshold", 150.0f);
@@ -411,7 +415,7 @@ ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), T
   buildTrack2D(det_p, kal_p, tra_p, bbo_p);
 
 #ifdef PUBLISH_DETECTION_IMAGE
-  tracker_pub_ = this->create_publisher<sensor_msgs::msg::Image>("tracking_image", 1);
+  tracker_pub_ = image_transport::create_publisher(this, "tracking_image", rmw_qos_profile_sensor_data);
 #endif
 }
 
@@ -425,12 +429,14 @@ ROSDetectTrack2DAndLocate::~ROSDetectTrack2DAndLocate(){}
  */
 void ROSDetectTrack2DAndLocate::publishTrackingImage(cv::Mat& image_tracker,
                                                     std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
+#ifdef PUBLISH_DETECTION_IMAGE
   generateTrackingImage(image_tracker, tracker_states);
   cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
   std_msgs::msg::Header image_ptr_out_header;
   image_ptr_out_header.stamp = this->now();
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
   tracker_pub_.publish(image_ptr_out_);
+#endif
 }
 
 #ifdef PUBLISH_DETECTION_WITH_POSITION
@@ -475,8 +481,8 @@ void ROSDetectTrack2DAndLocate::publishDetectionsAndPositions(std::vector<std::m
   pose_array.header = ros_bboxes.header;
   pose_array.poses = poses;
   
-  positions_bboxes_pub_.publish(ros_bboxes);
-  pose_array_pub_.publish(pose_array);
+  positions_bboxes_pub_->publish(ros_bboxes);
+  pose_array_pub_->publish(pose_array);
 }
 
 #else
@@ -508,7 +514,7 @@ void ROSDetectTrack2DAndLocate::publishDetections(std::vector<std::map<unsigned 
   ros_bboxes.header.frame_id = header.frame_id;
   ros_bboxes.bboxes = vec_ros_bboxes;
 
-  bboxes_pub_.publish(ros_bboxes);
+  bboxes_pub_->publish(ros_bboxes);
 }
 
 /**
@@ -534,7 +540,7 @@ void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned i
   pose_array.header.stamp = header.stamp;
   pose_array.header.frame_id = header.frame_id;
   pose_array.poses = poses;
-  pose_array_pub_.publish(pose_array);
+  pose_array_pub_->publish(pose_array);
 }
 #endif
 
@@ -543,11 +549,11 @@ void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned i
  * 
  * @param msg 
  */
-void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::msg::Image::SharedPtr& msg){
+void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg){
   t2_ = t1_;
   t1_ = this->now();
-  ros::Duration dt = t1_ - t2_; 
-  dt_ = (float) (dt.toSec());
+  rclcpp::Duration dt = t1_ - t2_; 
+  dt_ = (float) (dt.seconds());
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
 #endif
@@ -555,7 +561,7 @@ void ROSDetectTrack2DAndLocate::imageCallback(const sensor_msgs::msg::Image::Sha
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
   } catch (cv_bridge::Exception &e) {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     return;
   }
   cv::Mat image = cv_ptr->image;
@@ -609,16 +615,18 @@ ROSDetectAndTrack2D::ROSDetectAndTrack2D() : ROSDetect(), Track2D() {
   this->get_parameter("class_map", det_p.class_map);
   this->get_parameter("num_buffers", det_p.num_buffers);
   // Kalman parameters
-  std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
-  std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
+  std::vector<double> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
+  std::vector<double> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
   Q_.resize(6);
   R_.resize(6);
-  this->declare_parameter<std::vector<float>>("Q", default_Q);
-  this->declare_parameter<std::vector<float>>("R", default_R);
+  this->declare_parameter<std::vector<double>>("Q", default_Q);
+  this->declare_parameter<std::vector<double>>("R", default_R);
   this->declare_parameter<bool>("use_vel", false);
   this->declare_parameter<bool>("use_dim", true);
-  this->get_parameter("Q", kal_p.Q);
-  this->get_parameter("R", kal_p.R);
+  this->get_parameter("Q", default_Q);
+  this->get_parameter("R", default_R);
+  std::copy(default_Q.begin(), default_Q.end(), back_inserter(kal_p.Q));
+  std::copy(default_R.begin(), default_R.end(), back_inserter(kal_p.R));
   this->get_parameter("use_vel", kal_p.use_vel);
   this->get_parameter("use_dim", kal_p.use_dim);
   // Tracking parameters
@@ -646,7 +654,7 @@ ROSDetectAndTrack2D::ROSDetectAndTrack2D() : ROSDetect(), Track2D() {
   buildTrack2D(det_p, kal_p, tra_p, bbo_p);
 
 #ifdef PUBLISH_DETECTION_IMAGE
-  tracker_pub_ = this->create_publisher<sensor_msgs::msg::Image>("tracking_image", 1);
+  tracker_pub_ = image_transport::create_publisher(this, "tracking_image", rmw_qos_profile_sensor_data);
 #endif
 }
 
@@ -660,12 +668,14 @@ ROSDetectAndTrack2D::~ROSDetectAndTrack2D(){}
  */
 void ROSDetectAndTrack2D::publishTrackingImage(cv::Mat& image_tracker,
                                                std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
+#ifdef PUBLISH_DETECTION_IMAGE
   generateTrackingImage(image_tracker, tracker_states);
   cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
   std_msgs::msg::Header image_ptr_out_header;
   image_ptr_out_header.stamp = this->now();
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
   tracker_pub_.publish(image_ptr_out_);
+#endif
 }
 
 /**
@@ -676,9 +686,9 @@ void ROSDetectAndTrack2D::publishTrackingImage(cv::Mat& image_tracker,
  */
 void ROSDetectAndTrack2D::publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
                                             std_msgs::msg::Header& header) {
-  detect_and_track::BoundingBoxes2D ros_bboxes;
-  detect_and_track::BoundingBox2D ros_bbox;
-  std::vector<detect_and_track::BoundingBox2D> vec_ros_bboxes;
+  detect_and_track::msg::BoundingBoxes2D ros_bboxes;
+  detect_and_track::msg::BoundingBox2D ros_bbox;
+  std::vector<detect_and_track::msg::BoundingBox2D> vec_ros_bboxes;
 
   for (unsigned int i=0; i<tracker_states.size(); i++) {
     for (auto & element : tracker_states[i]) {
@@ -695,7 +705,7 @@ void ROSDetectAndTrack2D::publishDetections(std::vector<std::map<unsigned int, s
   ros_bboxes.header.frame_id = header.frame_id;
   ros_bboxes.bboxes = vec_ros_bboxes;
 
-  bboxes_pub_.publish(ros_bboxes);
+  bboxes_pub_->publish(ros_bboxes);
 }
 
 /**
@@ -703,11 +713,11 @@ void ROSDetectAndTrack2D::publishDetections(std::vector<std::map<unsigned int, s
  * 
  * @param msg 
  */
-void ROSDetectAndTrack2D::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg){
+void ROSDetectAndTrack2D::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg){
   t2_ = t1_;
   t1_ = this->now();
-  ros::Duration dt = t1_ - t2_; 
-  dt_ = (float) (dt.toSec());
+  rclcpp::Duration dt = t1_ - t2_; 
+  dt_ = (float) (dt.seconds());
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
 #endif
@@ -715,7 +725,7 @@ void ROSDetectAndTrack2D::imageCallback(const sensor_msgs::msg::Image::SharedPtr
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
   } catch (cv_bridge::Exception &e) {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     return;
   }
   cv::Mat image = cv_ptr->image;
@@ -744,7 +754,7 @@ void ROSDetectAndTrack2D::imageCallback(const sensor_msgs::msg::Image::SharedPtr
  * @brief Construct a new ROSTrack2D::ROSTrack2D object
  * 
  */
-ROSTrack2D::ROSTrack2D() : Node("Track2D"), Track2D() {
+ROSTrack2D::ROSTrack2D() : Track2D(), Node("Track2D") {
   DetectionParameters det_p;
   KalmanParameters kal_p;
   TrackingParameters tra_p;
@@ -760,16 +770,18 @@ ROSTrack2D::ROSTrack2D() : Node("Track2D"), Track2D() {
   this->get_parameter("class_map", det_p.class_map);
   this->get_parameter("num_buffers", det_p.num_buffers);
   // Kalman parameters
-  std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
-  std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
+  std::vector<double> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
+  std::vector<double> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
   Q_.resize(6);
   R_.resize(6);
-  this->declare_parameter<std::vector<float>>("Q", default_Q);
-  this->declare_parameter<std::vector<float>>("R", default_R);
+  this->declare_parameter<std::vector<double>>("Q", default_Q);
+  this->declare_parameter<std::vector<double>>("R", default_R);
   this->declare_parameter<bool>("use_vel", false);
   this->declare_parameter<bool>("use_dim", true);
-  this->get_parameter("Q", kal_p.Q);
-  this->get_parameter("R", kal_p.R);
+  this->get_parameter("Q", default_Q);
+  this->get_parameter("R", default_R);
+  std::copy(default_Q.begin(), default_Q.end(), back_inserter(kal_p.Q));
+  std::copy(default_R.begin(), default_R.end(), back_inserter(kal_p.R));
   this->get_parameter("use_vel", kal_p.use_vel);
   this->get_parameter("use_dim", kal_p.use_dim);
   // Tracking parameters
@@ -798,11 +810,11 @@ ROSTrack2D::ROSTrack2D() : Node("Track2D"), Track2D() {
 
   cv::Mat image_;
 
-  image_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/camera/aligned_depth_to_color/image_raw", 1, std::bind(&ROSTrack2D::imageCallback, this, 1));
-  bboxes_sub_ = this->create_subscription<detect_and_track::msg::BoundingBoxes2D>("bounding_boxes", 1, std::bind(&ROSTrack2D::bboxesCallback, this, 1));
+  image_sub_ = image_transport::create_subscription(this, "/camera/color/image_raw", image_transport::Subscriber::Callback(std::bind(&ROSTrack2D::imageCallback, this, std::placeholders::_1)),"raw", rmw_qos_profile_sensor_data);
+  bboxes_sub_ = this->create_subscription<detect_and_track::msg::BoundingBoxes2D>("bounding_boxes", 1, std::bind(&ROSTrack2D::bboxesCallback, this, std::placeholders::_1));
   bboxes_pub_ = this->create_publisher<detect_and_track::msg::BoundingBoxes2D>("tracking_bounding_boxes", 1);
 #ifdef PUBLISH_DETECTION_IMAGE
-  tracker_pub_ = this->create_publisher<sensor_msgs::msg::Image>("tracking_image", 1);
+  tracker_pub_ = image_transport::create_publisher(this, "tracking_image", rmw_qos_profile_sensor_data);
 #endif
 }
 
@@ -816,12 +828,14 @@ ROSTrack2D::~ROSTrack2D(){}
  */
 void ROSTrack2D::publishTrackingImage(cv::Mat& image_tracker,
                                                std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
+#ifdef PUBLISH_DETECTION_IMAGE
   generateTrackingImage(image_tracker, tracker_states);
   cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
   std_msgs::msg::Header image_ptr_out_header;
   image_ptr_out_header.stamp = this->now();
   image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
   tracker_pub_.publish(image_ptr_out_);
+#endif
 }
 
 /**
@@ -851,7 +865,7 @@ void ROSTrack2D::publishDetections(std::vector<std::map<unsigned int, std::vecto
   ros_bboxes.header.frame_id = header.frame_id;
   ros_bboxes.bboxes = vec_ros_bboxes;
 
-  bboxes_pub_.publish(ros_bboxes);
+  bboxes_pub_->publish(ros_bboxes);
 }
 
 void ROSTrack2D::ROSbboxes2bboxes(const detect_and_track::msg::BoundingBoxes2D::SharedPtr msg, std::vector<std::vector<BoundingBox>>& bboxes){
@@ -874,8 +888,8 @@ void ROSTrack2D::ROSbboxes2bboxes(const detect_and_track::msg::BoundingBoxes2D::
 void ROSTrack2D::bboxesCallback(const detect_and_track::msg::BoundingBoxes2D::SharedPtr msg){
   t2_ = t1_;
   t1_ = this->now();
-  ros::Duration dt = t1_ - t2_; 
-  dt_ = (float) (dt.toSec());
+  rclcpp::Duration dt = t1_ - t2_; 
+  dt_ = (float) (dt.seconds());
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
 #endif
@@ -902,12 +916,12 @@ void ROSTrack2D::bboxesCallback(const detect_and_track::msg::BoundingBoxes2D::Sh
  * 
  * @param msg 
  */
-void ROSTrack2D::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg){
+void ROSTrack2D::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg){
   cv_bridge::CvImagePtr cv_ptr;
   try {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
   } catch (cv_bridge::Exception &e) {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
+    RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     return;
   }
   image_ = cv_ptr->image;

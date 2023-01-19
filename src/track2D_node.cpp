@@ -1,9 +1,9 @@
-#include <detect_and_track/ROSWrappers.h>
+#include <detect_and_track/ROS2Wrappers.h>
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "drone_detector");
-  ROSTrack2D rt2d;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<ROSTrack2D>());
+  rclcpp::shutdown();
   return 0;
 }

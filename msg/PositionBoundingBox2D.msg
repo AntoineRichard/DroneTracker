@@ -1,2 +1,2 @@
-detect_and_track/BoundingBox2D bbox
+BoundingBox2D bbox
 geometry_msgs/Point position

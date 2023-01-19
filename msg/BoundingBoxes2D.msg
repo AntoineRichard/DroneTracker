@@ -1,2 +1,2 @@
-Header header
-detect_and_track/BoundingBox2D[] bboxes
+std_msgs/Header header
+BoundingBox2D[] bboxes
