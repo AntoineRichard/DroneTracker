@@ -7,6 +7,7 @@
       },
       "includePath": [
         "/home/antoine/Documents/Sesame/ROS/noetic_ws/devel/include/**",
+        "/home/antoine/Documents/Sesame/ROS/foxy_ws/**",
         "/opt/ros/noetic/include/**",
         "/opt/ros/foxy/include/**",
         "/home/antoine/Downloads/TensorRT-8.4.1.5/include/**",
