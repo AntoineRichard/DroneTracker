@@ -3,7 +3,7 @@ project(detect_and_track)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
-add_compile_options(-std=c++17 -O3 -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION -DDEBUG_TRACKER -DPROFILE)
+add_compile_options(-std=c++17 -O3 -DPUBLISH_DETECTION_IMAGE -DPUBLISH_DETECTION_WITH_POSITION -DDEBUG_POSE)
 
 ## Fastest compile options
 #add_compile_options(-std=c++17 -O3)
@@ -73,18 +73,11 @@ add_library(DetectionUtils src/DetectionUtils.cpp)
 add_library(Utils src/utils.cpp)
 add_library(ROSWrappers src/ROSWrappers.cpp)
 
-#add_executable(depth_extractor src/depth_extractor.cpp)
 add_executable(detect_node src/detect_node.cpp)
 add_executable(detect_and_locate_node src/detect_and_locate_node.cpp)
 add_executable(detect_and_track2D_node src/detect_and_track2D_node.cpp)
 add_executable(detect_track2D_and_locate_node src/detect_track2D_and_locate_node.cpp)
 add_executable(track2D_node src/track2D_node.cpp)
-
-
-#target_link_libraries(depth_extractor
-#    ${catkin_LIBRARIES}
-#    ${OpenCV_LIBS}
-#)
 
 target_link_libraries(detect_node
     ROSWrappers
@@ -160,3 +153,10 @@ target_link_libraries(detect_track2D_and_locate_node
     nvinfer
     cudart
 )
+
+add_dependencies(ROSWrappers detect_and_track_generate_messages_cpp)
+add_dependencies(detect_node detect_and_track_generate_messages_cpp)
+add_dependencies(detect_and_locate_node detect_and_track_generate_messages_cpp)
+add_dependencies(track2D_node detect_and_track_generate_messages_cpp)
+add_dependencies(detect_and_track2D_node detect_and_track_generate_messages_cpp)
+add_dependencies(detect_track2D_and_locate_node detect_and_track_generate_messages_cpp)
