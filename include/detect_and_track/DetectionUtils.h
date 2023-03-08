@@ -34,6 +34,7 @@ class Detect {
     int image_cols_;
     int padding_rows_;
     int padding_cols_;
+    float r_;
     cv::Mat padded_image_;
 
     //Profiling variables
@@ -90,6 +91,8 @@ class Locate {
                 std::vector<std::map<unsigned int, float>>&, std::vector<std::map<unsigned int, std::vector<float>>>&);
     void updateCameraInfo(const std::vector<float>&, const std::vector<float>&);
     void printProfilingLocalization();
+    void make3DBoundingBoxes(const std::vector<std::vector<std::vector<float>>>&, const std::vector<std::vector<BoundingBox>>&,
+                             std::vector<std::vector<BoundingBox3D>>&);
 };
 
 
@@ -167,6 +170,65 @@ class DetectTrack2DAndLocate : public Detect, public Locate, public Track2D {
   public:
     DetectTrack2DAndLocate();
     DetectTrack2DAndLocate(GlobalParameters&, DetectionParameters&, NMSParameters&,
+                           KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&,
+                           LocalizationParameters&, CameraParameters&);
+    void applyOnFolder(std::string, std::string, bool, bool, bool);
+    void applyOnVideo(std::string, std::string, bool, bool, bool);
+};
+
+class Track3D {
+  protected:
+    // Tracker parameters
+    std::vector<float> Q_;
+    std::vector<float> R_;
+    float dist_threshold_;
+    float center_threshold_;
+    float area_threshold_;
+    float body_ratio_;
+    bool use_dim_;
+    bool use_vel_;
+    int max_frames_to_skip_;
+    float min_bbox_width_;
+    float min_bbox_height_;
+    float max_bbox_width_;
+    float max_bbox_height_;
+
+    //Profiling variables
+#ifdef PROFILE
+    std::chrono::time_point<std::chrono::system_clock> start_tracking_;
+    std::chrono::time_point<std::chrono::system_clock> end_tracking_;
+#endif
+
+    // dt update for Kalman 
+    float dt_;
+    
+    // Object detector parameters
+    std::vector<std::string> class_map_;
+
+    std::vector<Tracker3D*> Trackers_;
+
+    void cast2states(std::vector<std::vector<std::vector<float>>>&,
+                     const std::vector<std::vector<BoundingBox3D>>&);
+
+  public:
+    Track3D();
+    Track3D(DetectionParameters&, KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
+    void buildTrack3D(DetectionParameters&, KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&);
+    ~Track3D();
+
+    void track(const std::vector<std::vector<BoundingBox3D>>&,
+              std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void track(const std::vector<std::vector<BoundingBox3D>>&,
+              std::vector<std::map<unsigned int, std::vector<float>>>&,
+              const float&);
+    void generateTrackingImage(cv::Mat&, const std::vector<std::map<unsigned int, std::vector<float>>>);
+    void printProfilingTracking();
+};
+
+class DetectAndTrack3D : public Detect, public Locate, public Track3D {
+  public:
+    DetectAndTrack3D();
+    DetectAndTrack3D(GlobalParameters&, DetectionParameters&, NMSParameters&,
                            KalmanParameters&, TrackingParameters&, BBoxRejectionParameters&,
                            LocalizationParameters&, CameraParameters&);
     void applyOnFolder(std::string, std::string, bool, bool, bool);

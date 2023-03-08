@@ -35,18 +35,17 @@ void Detect::buildDetect(GlobalParameters& global_parameters, DetectionParameter
 Detect::~Detect() {}
 
 void Detect::padImage(cv::Mat& image) {
-  float r;
-  r = (float) image_size_ / std::max(image.rows, image.cols);
-  //printf("DEBUG: %f\n",r);
-  if (r != 1) {
-    cv::resize(image, image, cv::Size(), r, r, cv::INTER_AREA);
-    printf("Not implemented\n");
-  }
+  r_ = (float) image_size_ / std::max(image.rows, image.cols);
+  cv::Mat tmp;
+  printf("DEBUG: %f\n",r_);
+  //if (r_ != 1) {
+  cv::resize(image, tmp, cv::Size(), r_, r_, cv::INTER_AREA);
+    //printf("Not implemented\n");
+  //}
   //printf("rows %d, cols%d\n", image.rows, image.cols);
-  padding_rows_ = (image_size_ - image.rows)/2;
-  padding_cols_ = (image_size_ - image.cols)/2;
-  image.copyTo(padded_image_(cv::Range(padding_rows_,padding_rows_+image.rows),cv::Range(padding_cols_,padding_cols_+image.cols)));
-  
+  padding_rows_ = (image_size_ - tmp.rows)/2;
+  padding_cols_ = (image_size_ - tmp.cols)/2;
+  tmp.copyTo(padded_image_(cv::Range(padding_rows_,padding_rows_+tmp.rows),cv::Range(padding_cols_,padding_cols_+tmp.cols)));  
 }
 
 void Detect::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) {
@@ -57,10 +56,18 @@ void Detect::adjustBoundingBoxes(std::vector<std::vector<BoundingBox>>& bboxes) 
       }
       bboxes[i][j].x_ -= padding_cols_;
       bboxes[i][j].y_ -= padding_rows_;
-      bboxes[i][j].x_min_ = std::max(bboxes[i][j].x_ - bboxes[i][j].w_/2, (float) 0.0);
-      bboxes[i][j].x_max_ = std::min(bboxes[i][j].x_ + bboxes[i][j].w_/2, (float) image_cols_);
-      bboxes[i][j].y_min_ = std::max(bboxes[i][j].y_ - bboxes[i][j].h_/2, (float) 0.0);
-      bboxes[i][j].y_max_ = std::min(bboxes[i][j].y_ + bboxes[i][j].h_/2, (float) image_rows_);
+      bboxes[i][j].x_ /= r_;
+      bboxes[i][j].y_ /= r_;
+      bboxes[i][j].x_min_ = bboxes[i][j].x_ - bboxes[i][j].w_/(2*r_);
+      bboxes[i][j].x_max_ = bboxes[i][j].x_ + bboxes[i][j].w_/(2*r_);
+      bboxes[i][j].y_min_ = bboxes[i][j].y_ - bboxes[i][j].h_/(2*r_);
+      bboxes[i][j].y_max_ = bboxes[i][j].y_ + bboxes[i][j].h_/(2*r_);
+      bboxes[i][j].h_ = bboxes[i][j].h_ / r_;
+      bboxes[i][j].w_ = bboxes[i][j].w_ / r_;
+      //bboxes[i][j].x_min_ = std::max(bboxes[i][j].x_ - bboxes[i][j].w_/(2*r_), (float) 0.0);
+      //bboxes[i][j].x_max_ = std::min(bboxes[i][j].x_ + bboxes[i][j].w_/(2*r_), (float) image_cols_);
+      //bboxes[i][j].y_min_ = std::max(bboxes[i][j].y_ - bboxes[i][j].h_/(2*r_), (float) 0.0);
+      //bboxes[i][j].y_max_ = std::min(bboxes[i][j].y_ + bboxes[i][j].h_/(2*r_), (float) image_rows_);
     }
   }
 }
@@ -167,6 +174,22 @@ void Locate::printProfilingLocalization(){
   printf(" - Distance estimation done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_distance_ - start_distance_).count());
   printf(" - Position estimation done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_position_ - start_position_).count());
 #endif
+}
+
+void Locate::make3DBoundingBoxes(const std::vector<std::vector<std::vector<float>>>& points, const std::vector<std::vector<BoundingBox>>& bboxes,
+                                  std::vector<std::vector<BoundingBox3D>>& bboxes3D) {
+  float new_w, new_h;
+  bboxes3D.clear();
+  for (unsigned int i=0; i<points.size(); i++){
+    std::vector<BoundingBox3D> tmp_bboxes3D;
+    for (unsigned int j=0; j<points[i].size(); j++) {
+      new_w = points[i][j][2] * bboxes[i][j].w_ / PE_->getFx();
+      new_h = points[i][j][2] * bboxes[i][j].h_ / PE_->getFy();
+      BoundingBox3D tmp(points[i][j][0],points[i][j][1],points[i][j][2], new_w, new_w, new_h, bboxes[i][j].confidence_, bboxes[i][j].class_id_);
+      tmp_bboxes3D.push_back(tmp);
+    }
+    bboxes3D.push_back(tmp_bboxes3D);
+  }
 }
 
 Track2D::Track2D(){}
@@ -307,6 +330,152 @@ void Track2D::generateTrackingImage(cv::Mat& image, const std::vector<std::map<u
 }
 
 void Track2D::printProfilingTracking(){
+#ifdef PROFILE
+  printf(" - Tracking done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking_ - start_tracking_).count());
+#endif
+}
+
+Track3D::Track3D(){}
+
+Track3D::Track3D(DetectionParameters& det_p, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p){
+  Q_ = kal_p.Q;
+  R_ = kal_p.R;
+  dist_threshold_ = tra_p.distance_thresh;
+  center_threshold_ = tra_p.center_thresh;
+  area_threshold_ = tra_p.area_thresh;
+  body_ratio_ = tra_p.body_ratio;
+  use_dim_ = kal_p.use_dim;
+  use_vel_ = kal_p.use_vel;
+  dt_ = tra_p.dt;
+  max_frames_to_skip_ = tra_p.max_frames_to_skip;
+  min_bbox_width_ = bbo_p.min_bbox_width;
+  max_bbox_width_ = bbo_p.max_bbox_width;
+  min_bbox_height_ = bbo_p.min_bbox_height;
+  max_bbox_height_ = bbo_p.max_bbox_width;
+  class_map_ = det_p.class_map;
+
+  for (unsigned int i=0; i<det_p.num_classes; i++){ // Create as many trackers as their are classes
+    Trackers_.push_back(new Tracker3D(max_frames_to_skip_, dist_threshold_, center_threshold_,
+                      area_threshold_, body_ratio_, dt_, use_dim_,
+                      use_vel_, Q_, R_)); 
+  }
+}
+
+void Track3D::buildTrack3D(DetectionParameters& det_p, KalmanParameters& kal_p, TrackingParameters& tra_p, BBoxRejectionParameters& bbo_p){
+  Q_ = kal_p.Q;
+  R_ = kal_p.R;
+  dist_threshold_ = tra_p.distance_thresh;
+  center_threshold_ = tra_p.center_thresh;
+  area_threshold_ = tra_p.area_thresh;
+  body_ratio_ = tra_p.body_ratio;
+  use_dim_ = kal_p.use_dim;
+  use_vel_ = kal_p.use_vel;
+  dt_ = tra_p.dt;
+  max_frames_to_skip_ = tra_p.max_frames_to_skip;
+  min_bbox_width_ = bbo_p.min_bbox_width;
+  max_bbox_width_ = bbo_p.max_bbox_width;
+  min_bbox_height_ = bbo_p.min_bbox_height;
+  max_bbox_height_ = bbo_p.max_bbox_width;
+  class_map_ = det_p.class_map;
+
+  for (unsigned int i=0; i<det_p.num_classes; i++){ // Create as many trackers as their are classes
+    Trackers_.push_back(new Tracker3D(max_frames_to_skip_, dist_threshold_, center_threshold_,
+                      area_threshold_, body_ratio_, dt_, use_dim_,
+                      use_vel_, Q_, R_)); 
+  }
+}
+
+Track3D::~Track3D() {
+  Trackers_.clear();
+} 
+
+void Track3D::cast2states(std::vector<std::vector<std::vector<float>>>& states, const std::vector<std::vector<BoundingBox3D>>& bboxes) {
+  states.clear();
+  std::vector<std::vector<float>> state_vec;
+  std::vector<float> state(6);
+
+  for (unsigned int i; i < bboxes.size(); i++) {
+    state_vec.clear();
+    for (unsigned int j; j < bboxes[i].size(); j++) {
+      if (!bboxes[i][j].valid_) {
+        continue;
+      }
+      if (bboxes[i][j].h_ > max_bbox_height_) {
+        continue;
+      }
+      if (bboxes[i][j].w_ > max_bbox_width_) {
+        continue;
+      }
+      if (bboxes[i][j].h_ < min_bbox_height_) {
+        continue;
+      }
+      if (bboxes[i][j].w_ < min_bbox_width_) {
+        continue;
+      }
+      state[0] = bboxes[i][j].x_;
+      state[1] = bboxes[i][j].y_;
+      state[2] = bboxes[i][j].z_;
+      state[3] = 0;
+      state[4] = 0;
+      state[5] = 0;
+      state[6] = bboxes[i][j].w_;
+      state[7] = bboxes[i][j].d_;
+      state[8] = bboxes[i][j].h_;
+      state_vec.push_back(state);
+      //printf("state %d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f\", j, state[0], state[1], state[2], state[3], state[4], state[5]);
+    }
+    states.push_back(state_vec);
+  }
+}
+
+
+void Track3D::track(const std::vector<std::vector<BoundingBox3D>>& bboxes,
+               std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
+#ifdef PROFILE
+  start_tracking_ = std::chrono::system_clock::now();
+#endif 
+  std::vector<std::vector<std::vector<float>>> states;
+  cast2states(states, bboxes);
+  for (unsigned int i=0; i < tracker_states.size(); i++){
+    std::vector<std::vector<float>> states_to_track;
+    states_to_track = states[i];
+    Trackers_[i]->update(dt_, states_to_track);
+    Trackers_[i]->getStates(tracker_states[i]);
+  }
+#ifdef PROFILE
+  end_tracking_ = std::chrono::system_clock::now();
+#endif
+}
+
+void Track3D::track(const std::vector<std::vector<BoundingBox3D>>& bboxes,
+               std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states, const float& dt) {
+#ifdef PROFILE
+  start_tracking_ = std::chrono::system_clock::now();
+#endif 
+  std::vector<std::vector<std::vector<float>>> states;
+  cast2states(states, bboxes);
+  for (unsigned int i=0; i < tracker_states.size(); i++){
+    std::vector<std::vector<float>> states_to_track;
+    states_to_track = states[i];
+    Trackers_[i]->update(dt, states_to_track);
+    Trackers_[i]->getStates(tracker_states[i]);
+  }
+#ifdef PROFILE
+  end_tracking_ = std::chrono::system_clock::now();
+#endif
+}
+
+void Track3D::generateTrackingImage(cv::Mat& image, const std::vector<std::map<unsigned int, std::vector<float>>> tracker_states) {
+  for (unsigned int i=0; i < tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      cv::Rect rect(element.second[0] - element.second[4]/2, element.second[1]-element.second[5]/2, element.second[4], element.second[5]);
+      cv::rectangle(image, rect, ColorPalette[element.first % 24], 3);
+      cv::putText(image, class_map_[i]+" "+std::to_string(element.first), cv::Point(element.second[0]-element.second[4]/2,element.second[1]-element.second[5]/2-10), cv::FONT_HERSHEY_SIMPLEX, 0.9, ColorPalette[element.first % 24], 2);
+    }
+  }
+}
+
+void Track3D::printProfilingTracking(){
 #ifdef PROFILE
   printf(" - Tracking done in %ld us\n", std::chrono::duration_cast<std::chrono::microseconds>(end_tracking_ - start_tracking_).count());
 #endif
