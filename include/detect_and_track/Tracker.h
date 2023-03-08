@@ -31,6 +31,7 @@
 class Object {
   protected:
     unsigned int nb_skipped_frames_;
+    unsigned int nb_consecutive_frames_;
     unsigned int nb_frames_;
     unsigned int id_;
     BaseKalmanFilter* KF_;
@@ -74,7 +75,23 @@ class Object2D : public Object {
 class Object3D : public Object {
   public:
     Object3D();
+    Object3D(const Object3D &);
     Object3D(const unsigned int&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+};
+
+/**
+ * @brief An object to be tracked.
+ * @details A class that contains all the information required to track an object.
+ * It has a built-in Kalman filter, to predict the position of the object,
+ * and a set of method to evaluate if the object matches a given observation.
+ * It also keeps track of some object specific information.
+ * 
+ */
+class Object3DF : public Object {
+  public:
+    Object3DF();
+    Object3DF(const Object3DF &);
+    Object3DF(const unsigned int&, const float&, const bool&, const std::vector<float>&);
 };
 
 /**
@@ -136,9 +153,7 @@ class BaseTracker {
  */
 class Tracker2D : public BaseTracker {
   protected:
-    // Tracker state
-    //std::map<unsigned int, Object2D*> Objects_;
-
+    float IoU(const std::vector<float>&, const std::vector<float>&) const;
     float centroidsError(const std::vector<float>&, const std::vector<float>&) const;
     float areaRatio(const std::vector<float>&, const std::vector<float>&) const;
     void addNewObject() override;
@@ -158,15 +173,33 @@ class Tracker2D : public BaseTracker {
  */
 class Tracker3D : public BaseTracker {
   protected:
-    // Tracker state
-    //std::map<unsigned int, Object3D*> Objects_;
-
+    float IoU(const std::vector<float>&, const std::vector<float>&) const;
     float centroidsError(const std::vector<float>&, const std::vector<float>&) const;
     float areaRatio(const std::vector<float>&, const std::vector<float>&) const;
     void addNewObject() override;
   public:
     Tracker3D();
     Tracker3D(const int&, const float&, const float&, const float&, const float&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
+};
+
+/**
+ * @brief An object tracker.
+ * @details This class tracks multiple objects.
+ * It uses their built-in kalman filter to estimate where the objects are going to be next.
+ * Then it compares their estimated position to a set observation to find the best possible match.
+ * This matching is done using the Hungarian Algorithm. Once the matching is done, the matches are analyzed and confirmed.
+ * The tracked objects which have an associated measurement are then updated.
+ * 
+ */
+class Tracker3DF : public BaseTracker {
+  protected:
+    float IoU(const std::vector<float>&, const std::vector<float>&) const;
+    float centroidsError(const std::vector<float>&, const std::vector<float>&) const;
+    float areaRatio(const std::vector<float>&, const std::vector<float>&) const;
+    void addNewObject() override;
+  public:
+    Tracker3DF();
+    Tracker3DF(const int&, const float&, const float&, const float&, const float&, const float&, const bool&, const bool&, const std::vector<float>&, const std::vector<float>&);
 };
 
 #endif

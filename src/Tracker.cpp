@@ -36,6 +36,7 @@ Object::Object(const unsigned int& id, const float& dt, const bool& use_dim,
   id_ = id;
   nb_frames_ = 0;
   nb_skipped_frames_ = 0;
+  nb_consecutive_frames_ = 0;
 }
 
 /**
@@ -86,6 +87,7 @@ void Object::predict(const float& dt) {
 void Object::correct(const std::vector<float>&  Z) {
   KF_->correct(Z);
   nb_skipped_frames_ = 0; // If correction then resets skip frames.
+  nb_consecutive_frames_ += 1;
 }
 
 /**
@@ -94,6 +96,9 @@ void Object::correct(const std::vector<float>&  Z) {
  * 
  */
 void Object::newFrame() {
+  if (nb_skipped_frames_ != 0) {
+    nb_consecutive_frames_ = 0;
+  }
   nb_frames_ ++;
   nb_skipped_frames_ ++;
 }
@@ -190,6 +195,31 @@ Object3D::Object3D(const unsigned int& id, const float& dt, const bool& use_dim,
  * @details Default constructor.
  * 
  */
+Object3DF::Object3DF() : Object::Object() {}
+
+/**
+ * @brief Prefered constructor.
+ * @details Prefered constructor.
+ * 
+ * @param id The id of the track.
+ * @param dt The time, in seconds, in between to filter updates.
+ * @param use_dim Whether or not the Kalman filter should use the height and width of the object in its observations.
+ * @param Q The reference to the process noise vector.
+ * @param R The reference to the measurement noise vector.
+ */
+Object3DF::Object3DF(const unsigned int& id, const float& dt, const bool& use_dim,
+                     const std::vector<float>& R) {
+  KF_ = new KalmanFilter3DF(dt, use_dim, R);
+  id_ = id;
+  nb_frames_ = 0;
+  nb_skipped_frames_ = 0;
+}
+
+/**
+ * @brief Default constructor.
+ * @details Default constructor.
+ * 
+ */
 BaseTracker::BaseTracker() : HA_(nullptr) {}
 
 /**
@@ -228,6 +258,8 @@ BaseTracker::BaseTracker(const int& max_frames_to_skip, const float& dist_tresho
   track_id_count_ = 0;
 }
 
+Tracker2D::Tracker2D() {}
+
 /**
  * @brief Prefered constructor
  * @details Pefered constructor
@@ -250,6 +282,8 @@ Tracker2D::Tracker2D(const int& max_frames_to_skip, const float& dist_treshold,
                      const std::vector<float>& R) : BaseTracker::BaseTracker(max_frames_to_skip,
                      dist_treshold, center_threshold, area_threshold, body_ratio,
                      dt, use_dim, use_vel, Q, R) {}
+
+Tracker3D::Tracker3D() {}
 
 /**
  * @brief Prefered constructor
@@ -595,6 +629,32 @@ void BaseTracker::addNewObject() {
  * @param s2 The reference to the second state.
  * @return The euclidean distance.
  */
+float Tracker2D::IoU(const std::vector<float>& s1, const std::vector<float>& s2) const {
+    const float x_min_new = std::max(s1[0] - s1[4]/2, s2[0] - s2[4]);
+    const float x_max_new = std::min(s1[0] + s1[4]/2, s2[0] + s2[4]);
+    const float w_new = x_max_new - x_min_new;
+    if (w_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float y_min_new = std::max(s1[1] - s1[5]/2, s2[1] + s2[5]/2);
+    const float y_max_new = std::min(s1[1] + s1[5]/2, s2[1] + s2[5]/2);
+    const float h_new = y_max_new - y_min_new;
+    if (h_new <= 0.0f) {
+        return 0.0f;
+    }
+
+  return w_new * h_new / (s1[4]*s1[5] + s2[4]*s2[5] - w_new * h_new);
+}
+
+/**
+ * @brief The distance between two states.
+ * @details Computes the distance between two states using the euclidean distance.
+ * 
+ * @param s1 The reference to first state.
+ * @param s2 The reference to the second state.
+ * @return The euclidean distance.
+ */
 float Tracker2D::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
    return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]));
 }
@@ -628,6 +688,39 @@ void Tracker2D::addNewObject() {
  * @param s2 The reference to the second state.
  * @return The euclidean distance.
  */
+float Tracker3D::IoU(const std::vector<float>& s1, const std::vector<float>& s2) const {
+    const float x_min_new = std::max(s1[0] - s1[6]/2, s2[0] - s2[6]);
+    const float x_max_new = std::min(s1[0] + s1[6]/2, s2[0] + s2[6]);
+    const float w_new = x_max_new - x_min_new;
+    if (w_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float y_min_new = std::max(s1[1] - s1[7]/2, s2[1] + s2[7]/2);
+    const float y_max_new = std::min(s1[1] + s1[7]/2, s2[1] + s2[7]/2);
+    const float d_new = y_max_new - y_min_new;
+    if (d_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float z_min_new = std::max(s1[2] - s1[8]/2, s2[1] + s2[8]/2);
+    const float z_max_new = std::min(s1[2] + s1[8]/2, s2[1] + s2[8]/2);
+    const float h_new = z_max_new - z_min_new;
+    if (h_new <= 0.0f) {
+        return 0.0f;
+    }
+
+  return w_new * d_new * h_new / (s1[6]*s1[7]*s1[8] + s2[6]*s2[7]*s2[8] - w_new * d_new * h_new);
+}
+
+/**
+ * @brief The distance between two states.
+ * @details Computes the distance between two states using the euclidean distance.
+ * 
+ * @param s1 The reference to first state.
+ * @param s2 The reference to the second state.
+ * @return The euclidean distance.
+ */
 float Tracker3D::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
    return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]) + (s1[2] - s2[2])*(s1[2] - s2[2]));
 }
@@ -651,4 +744,70 @@ float Tracker3D::areaRatio(const std::vector<float>& s1, const std::vector<float
  */
 void Tracker3D::addNewObject() {
   Objects_.insert(std::make_pair(track_id_count_, new Object3D(track_id_count_, dt_, use_dim_, use_vel_, Q_, R_)));
+}
+
+/**
+ * @brief The distance between two states.
+ * @details Computes the distance between two states using the euclidean distance.
+ * 
+ * @param s1 The reference to first state.
+ * @param s2 The reference to the second state.
+ * @return The euclidean distance.
+ */
+float Tracker3DF::IoU(const std::vector<float>& s1, const std::vector<float>& s2) const {
+    const float x_min_new = std::max(s1[0] - s1[6]/2, s2[0] - s2[6]);
+    const float x_max_new = std::min(s1[0] + s1[6]/2, s2[0] + s2[6]);
+    const float w_new = x_max_new - x_min_new;
+    if (w_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float y_min_new = std::max(s1[1] - s1[7]/2, s2[1] + s2[7]/2);
+    const float y_max_new = std::min(s1[1] + s1[7]/2, s2[1] + s2[7]/2);
+    const float d_new = y_max_new - y_min_new;
+    if (d_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float z_min_new = std::max(s1[2] - s1[8]/2, s2[1] + s2[8]/2);
+    const float z_max_new = std::min(s1[2] + s1[8]/2, s2[1] + s2[8]/2);
+    const float h_new = z_max_new - z_min_new;
+    if (h_new <= 0.0f) {
+        return 0.0f;
+    }
+
+  return w_new * d_new * h_new / (s1[6]*s1[7]*s1[8] + s2[6]*s2[7]*s2[8] - w_new * d_new * h_new);
+}
+
+/**
+ * @brief The distance between two states.
+ * @details Computes the distance between two states using the euclidean distance.
+ * 
+ * @param s1 The reference to first state.
+ * @param s2 The reference to the second state.
+ * @return The euclidean distance.
+ */
+float Tracker3DF::centroidsError(const std::vector<float>& s1, const std::vector<float>& s2) const {
+   return sqrt((s1[0] - s2[0])*(s1[0] - s2[0]) + (s1[1] - s2[1])*(s1[1] - s2[1]) + (s1[2] - s2[2])*(s1[2] - s2[2]));
+}
+
+/**
+ * @brief The area ratio between two states.
+ * @details Compute the ratio between the area of the two states.
+ * 
+ * @param s1 The reference to the first state.
+ * @param s2 The reference to the second state.
+ * @return The area ratio.
+ */
+float Tracker3DF::areaRatio(const std::vector<float>& s1, const std::vector<float>& s2) const {
+  return (s1[6]*s1[7]) / (s2[6]*s2[7]);
+}
+
+/**
+ * @brief Adds a new object to the list of tracked objects.
+ * @details Adds a new object to the list of tracked objects.
+ * 
+ */
+void Tracker3DF::addNewObject() {
+  Objects_.insert(std::make_pair(track_id_count_, new Object3DF(track_id_count_, dt_, use_dim_, R_)));
 }
