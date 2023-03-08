@@ -149,11 +149,57 @@ class csvWriter {
         void openFile();
         void closeFile();
     public:
+        csvWriter();
         csvWriter(std::string&, std::string&, std::string&, std::vector<std::string>&, unsigned int&);
         ~csvWriter();
 
         void flush();
         void addToBuffer(std::vector<float> data);
+};
+
+class BoundingBox {
+    public:
+        int class_id_;
+        float confidence_;
+        float x_; // center x
+        float y_; // center y
+        float w_; // width
+        float h_; // height
+        float x_min_;
+        float x_max_;
+        float y_min_;
+        float y_max_;
+        float area_;
+        bool valid_ = true;
+
+        BoundingBox();
+        BoundingBox(float*, int&);
+        BoundingBox(const float&, const float&, const float&, const float&, const float&, const int&);
+        float calculateIOU(const BoundingBox&);
+        void compareWith(BoundingBox&, const float);
+        virtual void cast2state(std::vector<float>&);
+};
+        
+static bool sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
+    return bbox_0.confidence_ > bbox_1.confidence_;
+}
+
+class BoundingBox3D : public BoundingBox{
+    public:
+        int class_id_;
+        float confidence_;
+        float z_; // center z
+        float d_; // depth
+        float z_min_;
+        float z_max_;
+        float volume_;
+        bool valid_ = true;
+
+        BoundingBox3D();
+        BoundingBox3D(float*, int&);
+        BoundingBox3D(const float&, const float&, const float&, const float&, const float&, const float&, const float&, const int&);
+        float calculateIOU(const BoundingBox3D&);
+        void cast2state(std::vector<float>&) override;
 };
 
 /*class RotatedBoundingBox {
@@ -181,35 +227,5 @@ class csvWriter {
         bool valid_ = true;
         RotatedBoundingBox (float*, int&); 
 };*/
-
-
-class BoundingBox {
-    public:
-        int class_id_;
-        float confidence_;
-        float x_; // center x
-        float y_; // center y
-        float w_; // width
-        float h_; // height
-        float x_min_;
-        float x_max_;
-        float y_min_;
-        float y_max_;
-        float area_;
-        bool valid_ = true;
-
-        BoundingBox(float*, int&);
-        BoundingBox(const float&, const float&, const float&, const float&, const float&, const int&);
-        float calculateIOU(const BoundingBox&);
-        void compareWith(BoundingBox&, const float);
-};
-        
-static bool sortComparisonFunction(const BoundingBox& bbox_0, const BoundingBox& bbox_1) {
-    return bbox_0.confidence_ > bbox_1.confidence_;
-}
-//static bool sortComparisonFunction(const BoundingBox&, const BoundingBox&);
-//static bool sortComparisonFunction(const RotatedBoundingBox&, const RotatedBoundingBox&);
-//float calculateIOU (const RotatedBoundingBox&);
-//void compareWith(RotatedBoundingBox&, const float);
 
 #endif

@@ -1,5 +1,14 @@
 #include <detect_and_track/utils.h>
 
+/**
+ * @brief Construct a new csv Writer::csv Writer object
+ * 
+ * @param filename 
+ * @param separator 
+ * @param endline 
+ * @param header 
+ * @param max_buffer_size 
+ */
 csvWriter::csvWriter(std::string&  filename, std::string& separator, std::string& endline, std::vector<std::string>& header, unsigned int& max_buffer_size) : ofs_() {
     ofs_.exceptions(std::ios::failbit | std::ios::badbit);
     separator_ = separator;
@@ -9,10 +18,26 @@ csvWriter::csvWriter(std::string&  filename, std::string& separator, std::string
     makeHeader(header);
 }
 
+/**
+ * @brief Construct a new csv Writer::csv Writer object
+ * 
+ */
+csvWriter::csvWriter() : ofs_() {
+}
+
+/**
+ * @brief Destroy the csv Writer::csv Writer object
+ * 
+ */
 csvWriter::~csvWriter() {
     flush();
 }
 
+/**
+ * @brief 
+ * 
+ * @param header 
+ */
 void csvWriter::makeHeader(std::vector<std::string> header) {
     openFile();
     for (unsigned int row=0; row < header.size(); row ++) {
@@ -22,11 +47,19 @@ void csvWriter::makeHeader(std::vector<std::string> header) {
     closeFile();
 }
 
+/**
+ * @brief 
+ * 
+ */
 void csvWriter::createFile() {
     ofs_.open(filename_, std::ofstream::out | std::ofstream::trunc); 
     closeFile();
 }
 
+/**
+ * @brief 
+ * 
+ */
 void csvWriter::writeToFile() {
     for (unsigned int line=0; line < buffer_.size(); line ++) {
         for (unsigned int row=0; row < buffer_[line].size(); row ++) {
@@ -37,25 +70,253 @@ void csvWriter::writeToFile() {
     buffer_.clear();
 }
 
+/**
+ * @brief 
+ * 
+ */
 void csvWriter::openFile() {
     ofs_.open(filename_, std::ofstream::out | std::ofstream::app);
 }
 
+/**
+ * @brief 
+ * 
+ */
 void csvWriter::closeFile() {
     ofs_.close();
 }
 
+/**
+ * @brief 
+ * 
+ */
 void csvWriter::flush() {
     openFile();
     writeToFile();
     closeFile();
 }
 
+/**
+ * @brief 
+ * 
+ * @param data 
+ */
 void csvWriter::addToBuffer(std::vector<float> data) {
     buffer_.push_back(data);
     if (buffer_.size() >= max_buffer_size_) {
         flush();
     }
+}
+
+/**
+ * @brief Construct a new Bounding Box:: Bounding Box object
+ * 
+ */
+BoundingBox::BoundingBox() {}
+
+/**
+ * @brief Construct a new Bounding Box:: Bounding Box object
+ * 
+ * @param data 
+ * @param class_id 
+ */
+BoundingBox::BoundingBox(float* data, int& class_id) {
+    class_id_ =  class_id,
+    confidence_ = data[4];
+    x_ = data[0];
+    y_ = data[1];
+    w_ = data[2];
+    h_ = data[3];
+    x_min_ = data[0] - data[2]/2;
+    x_max_ = data[0] + data[2]/2;
+    y_min_ = data[1] - data[3]/2;
+    y_max_ = data[1] + data[3]/2;
+    area_ = data[2] * data[3];
+}
+
+/**
+ * @brief Construct a new Bounding Box:: Bounding Box object
+ * 
+ * @param xmin 
+ * @param ymin 
+ * @param width 
+ * @param height 
+ * @param conf 
+ * @param class_id 
+ */
+BoundingBox::BoundingBox(const float& xmin, const float& ymin, const float& width, const float& height, const float& conf, const int& class_id) {
+    class_id_ =  class_id,
+    confidence_ = conf;
+    x_ = xmin + width/2;
+    y_ = ymin + height/2;
+    w_ = width;
+    h_ = height;
+    x_min_ = xmin;
+    x_max_ = xmin+width;
+    y_min_ = ymin;
+    y_max_ = ymin+height;
+    area_ = height*width;
+}
+
+/**
+ * @brief 
+ * 
+ * @param bbox 
+ * @return float 
+ */
+float BoundingBox::calculateIOU(const BoundingBox& bbox) {
+    const float x_min_new = std::max(x_min_, bbox.x_min_);
+    const float x_max_new = std::min(x_max_, bbox.x_max_);
+    const float w_new = x_max_new - x_min_new;
+    if (w_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float y_min_new = std::max(y_min_, bbox.y_min_);
+    const float y_max_new = std::min(y_max_, bbox.y_max_);
+    const float h_new = y_max_new - y_min_new;
+    if (h_new <= 0.0f) {
+        return 0.0f;
+    }
+
+  return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
+} 
+
+/**
+ * @brief 
+ * 
+ * @param bbox 
+ * @param thred_IOU 
+ */
+void BoundingBox::compareWith(BoundingBox& bbox, const float thred_IOU) {
+    if (bbox.valid_ == false || class_id_ != bbox.class_id_) {
+        return;
+    }
+
+    if (calculateIOU(bbox) >= thred_IOU) {
+        bbox.valid_ = false;
+    }
+}
+
+/**
+ * @brief 
+ * 
+ * @param state 
+ */
+void BoundingBox::cast2state(std::vector<float>& state) {
+    state.resize(6);
+    state[0] = x_;
+    state[1] = y_;
+    state[2] = 0;
+    state[3] = 0;
+    state[4] = w_;
+    state[5] = h_;
+}
+
+/**
+ * @brief Construct a new Bounding Box 3 D:: Bounding Box 3 D object
+ * 
+ */
+BoundingBox3D::BoundingBox3D() : BoundingBox::BoundingBox() {}
+
+/**
+ * @brief Construct a new Bounding Box 3 D:: Bounding Box 3 D object
+ * 
+ * @param data 
+ * @param class_id 
+ */
+BoundingBox3D::BoundingBox3D(float* data, int& class_id) {
+    class_id_ =  class_id,
+    confidence_ = data[6];
+    w_ = data[3];
+    d_ = data[4];
+    h_ = data[5];
+    x_min_ = data[0] - data[3]/2;
+    x_max_ = data[0] + data[3]/2;
+    y_min_ = data[1] - data[4]/2;
+    y_max_ = data[1] + data[4]/2;
+    z_min_ = data[2] - data[5]/2;
+    z_max_ = data[2] + data[5]/2;
+    volume_ = data[3] * data[4] * data[5];
+}
+
+/**
+ * @brief Construct a new Bounding Box 3 D:: Bounding Box 3 D object
+ * 
+ * @param x 
+ * @param y 
+ * @param z 
+ * @param width 
+ * @param depth 
+ * @param height 
+ * @param conf 
+ * @param class_id 
+ */
+BoundingBox3D::BoundingBox3D(const float& x, const float& y, const float& z, const float& width, const float& depth, const float& height, const float& conf, const int& class_id) {
+    class_id_ =  class_id,
+    confidence_ = conf;
+    w_ = width;
+    d_ = depth;
+    h_ = height;
+    x_ = x;
+    y_ = y;
+    z_ = z;
+    x_min_ = x - width/2;
+    x_max_ = x + width/2;
+    y_min_ = y - depth/2;
+    y_max_ = y + depth/2;
+    z_min_ = z - height/2;
+    z_max_ = z + height/2;
+    volume_ = height*width*depth;
+}
+
+/**
+ * @brief 
+ * 
+ * @param bbox 
+ * @return float 
+ */
+float BoundingBox3D::calculateIOU(const BoundingBox3D& bbox) {
+    const float x_min_new = std::max(x_min_, bbox.x_min_);
+    const float x_max_new = std::min(x_max_, bbox.x_max_);
+    const float w_new = x_max_new - x_min_new;
+    if (w_new <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float y_min_new = std::max(y_min_, bbox.y_min_);
+    const float y_max_new = std::min(y_max_, bbox.y_max_);
+    const float d_new = y_max_new - y_min_new;
+    if (d_new <= 0.0f) {
+        return 0.0f;
+    }
+    
+    const float z_min_new = std::max(z_min_, bbox.z_min_);
+    const float z_max_new = std::min(z_max_, bbox.z_max_);
+    const float h_new = z_max_new - z_min_new;
+    if (h_new <= 0.0f) {
+        return 0.0f;
+    }
+
+  return w_new * h_new * d_new/ (volume_ + bbox.volume_ - w_new * h_new * d_new);
+} 
+
+/**
+ * @brief 
+ * 
+ * @param state 
+ */
+void BoundingBox3D::cast2state(std::vector<float>& state) {
+    state.resize(9);
+    state[0] = x_;
+    state[1] = y_;
+    state[2] = z_;
+    state[3] = 0;
+    state[4] = 0;
+    state[5] = 0;
+    state[6] = w_;
+    state[7] = d_;
+    state[8] = h_;
 }
 
 /*RotatedBounding::RotatedBoundingBox(float* data, int& class_id) {
@@ -147,59 +408,3 @@ void compareWith(RotatedBoundingBox& bbox, const float thred_IOU) {
     }
 }
 */
-BoundingBox::BoundingBox(float* data, int& class_id) {
-    class_id_ =  class_id,
-    confidence_ = data[4];
-    x_ = data[0];
-    y_ = data[1];
-    w_ = data[2];
-    h_ = data[3];
-    x_min_ = data[0] - data[2]/2;
-    x_max_ = data[0] + data[2]/2;
-    y_min_ = data[1] - data[3]/2;
-    y_max_ = data[1] + data[3]/2;
-    area_ = data[2] * data[3];
-}
-
-BoundingBox::BoundingBox(const float& xmin, const float& ymin, const float& width, const float& height, const float& conf, const int& class_id) {
-    class_id_ =  class_id,
-    confidence_ = conf;
-    x_ = xmin + width/2;
-    y_ = ymin + height/2;
-    w_ = width;
-    h_ = height;
-    x_min_ = xmin;
-    x_max_ = xmin+width;
-    y_min_ = ymin;
-    y_max_ = ymin+height;
-    area_ = height*width;
-}
-
-
-float BoundingBox::calculateIOU(const BoundingBox& bbox) {
-    const float x_min_new = std::max(x_min_, bbox.x_min_);
-    const float x_max_new = std::min(x_max_, bbox.x_max_);
-    const float w_new = x_max_new - x_min_new;
-    if (w_new <= 0.0f) {
-        return 0.0f;
-    }
-
-    const float y_min_new = std::max(y_min_, bbox.y_min_);
-    const float y_max_new = std::min(y_max_, bbox.y_max_);
-    const float h_new = y_max_new - y_min_new;
-    if (h_new <= 0.0f) {
-        return 0.0f;
-    }
-
-  return w_new * h_new / (area_ + bbox.area_ - w_new * h_new);
-} 
-
-void BoundingBox::compareWith(BoundingBox& bbox, const float thred_IOU) {
-    if (bbox.valid_ == false || class_id_ != bbox.class_id_) {
-        return;
-    }
-
-    if (calculateIOU(bbox) >= thred_IOU) {
-        bbox.valid_ = false;
-    }
-}
