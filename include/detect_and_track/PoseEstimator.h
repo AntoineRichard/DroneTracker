@@ -72,6 +72,8 @@ class PoseEstimator {
     void distancePixel2PointPinHole(const float&, const std::vector<float>&, std::vector<float>& );
     void projectPixel2PointPinHole(const float&, const float&, const float&, float&, float&);
     void updateCameraParameters(const std::vector<float>&, const std::vector<float>&);
+    float getFx();
+    float getFy();
 };
 
 #endif

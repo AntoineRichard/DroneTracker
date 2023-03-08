@@ -137,10 +137,12 @@ PoseEstimator::PoseEstimator(GlobalParameters& glo_p, LocalizationParameters& lo
     distortion_model_ = 0;
   }
 
-  if (loc_p.mode == "pin_hole") {
+  if (loc_p.mode == "min_distance") {
     position_mode_ = 0;
-  } else if (loc_p.mode == "plumb_blob") {
+  } else if (loc_p.mode == "center") {
     position_mode_ = 1;
+  } else if (loc_p.mode == "average_min_distance") {
+    position_mode_ = 2;
   } else {
     position_mode_ = 0;
   }
@@ -167,13 +169,22 @@ PoseEstimator::PoseEstimator(GlobalParameters& glo_p, LocalizationParameters& lo
  */
 void PoseEstimator::updateCameraParameters(const std::vector<float>& camera_parameters, const std::vector<float>& lens_parameters) {
   fx_ = camera_parameters[0];
-  fy_ = camera_parameters[1];
+  fy_ = camera_parameters[4];
   cx_ = camera_parameters[2];
-  cy_ = camera_parameters[3];
+  cy_ = camera_parameters[5];
   fx_inv_ = 1/fx_;
   fy_inv_ = 1/fy_;
   K_ = lens_parameters;
 }
+
+float PoseEstimator::getFx(){
+  return fx_;
+}
+
+float PoseEstimator::getFy(){
+  return fy_;
+}
+
 
 /**
  * @brief Computes the position of the pixel in the camera's local frame.
@@ -325,9 +336,9 @@ float PoseEstimator::getDistance(const cv::Mat& depth_image, const int& x_min, c
   if (position_mode_ == 0) {
     distance = getMinDistance(depth_image, x_min, y_min, width, height);
   } else if (position_mode_ == 1) {
-    distance = getMinAverageDistance(depth_image, x_min, y_min, width, height);
-  } else if (position_mode_ == 2) {
     distance = getCenterDistance(depth_image, x_min, y_min, width, height);
+  } else if (position_mode_ == 2) {
+    distance = getMinAverageDistance(depth_image, x_min, y_min, width, height);
   }
   return distance;
 }
@@ -441,7 +452,7 @@ float PoseEstimator::getCenterDistance(const cv::Mat& depth_image, const int& x_
   std::vector<float> pixel(2,0);
   col = x_min + width / 2;
   row = y_min + height / 2;
-  z = depth_image.at<float>(col, row);
+  z = depth_image.at<float>(row, col);
   pixel[0] = (float) col;
   pixel[1] = (float) row;
   if (distortion_model_ == 1) {
@@ -580,7 +591,6 @@ std::vector<std::vector<std::vector<float>>> PoseEstimator::estimatePosition(con
   for (unsigned int i=0; i < bboxes.size(); i++) {
     point_vector.clear();
     for (unsigned int j=0; j < bboxes[i].size(); j++) {
-      float theta, phi;
       if (!bboxes[i][j].valid_) {
         point[0] = 0;
         point[1] = 0;
@@ -617,8 +627,6 @@ std::vector<std::map<unsigned int, std::vector<float>>> PoseEstimator::estimateP
   point_maps.resize(tracked_states.size());
   for (unsigned int i=0; i < tracked_states.size(); i++) {
     for (auto & element : tracked_states[i]) {
-      float theta, phi;
-      printf("%d",element.first);
       pixel[0] = element.second[0];
       pixel[1] = element.second[1];
       if (distortion_model_ == 1){
