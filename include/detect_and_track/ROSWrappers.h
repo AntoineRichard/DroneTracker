@@ -21,7 +21,10 @@
 #include <std_msgs/Header.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <ros/ros.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 
 class ROSDetect : public Detect {
@@ -62,6 +65,7 @@ class ROSDetectAndLocate : public ROSDetect, public Locate { // Should be using 
 
     // Image parameters
     cv::Mat depth_image_;
+    bool depth_received_;
 
     virtual void imageCallback(const sensor_msgs::Image::ConstPtr&) override;
     void depthInfoCallback(const sensor_msgs::CameraInfoConstPtr&);
@@ -137,7 +141,14 @@ class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D { //
     // dt update for Kalman 
     float dt_;
     ros::Time t1_;
-    ros::Time t2_;   
+    ros::Time t2_;
+
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener listener_;
+    std::string global_frame_;
+    geometry_msgs::PoseStamped uav_pose_;
+    csvWriter* csv_writer_;
+
 
     void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
     void publishDetectionsAndPositions(std::vector<std::map<unsigned int, std::vector<float>>>&,
@@ -152,6 +163,38 @@ class ROSDetectTrack2DAndLocate : public ROSDetectAndLocate, public Track2D { //
   public:
     ROSDetectTrack2DAndLocate();
     ~ROSDetectTrack2DAndLocate();
+};
+
+class ROSDetectAndTrack3D : public ROSDetectAndLocate, public Track3D { // should be using virtual classes
+  protected: 
+#ifdef PUBLISH_DETECTION_IMAGE   
+    image_transport::Publisher tracker_pub_;
+#endif
+    // dt update for Kalman 
+    float dt_;
+    ros::Time t1_;
+    ros::Time t2_;   
+
+    // Transform parameters
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener listener_;
+    std::string global_frame_;
+
+
+    void publishTrackingImage(cv::Mat&, std::vector<std::map<unsigned int, std::vector<float>>>&);
+    void publishDetectionsAndPositions(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                                       std::vector<std::map<unsigned int, std::vector<float>>>&,
+                                       std_msgs::Header&);
+    void publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                          std_msgs::Header&);
+    void publishPositions(std::vector<std::map<unsigned int, std::vector<float>>>&,
+                          std_msgs::Header&);
+    virtual void imageCallback(const sensor_msgs::Image::ConstPtr&) override;
+    void points2Pose(std::vector<std::vector<std::vector<float>>>&);
+
+  public:
+    ROSDetectAndTrack3D();
+    ~ROSDetectAndTrack3D();
 };
 
 /*class ROSDetectTrack2DAndLocateTF : public ROSDetectTrack2DAndLocate {

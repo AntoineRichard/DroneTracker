@@ -138,6 +138,8 @@ ROSDetectAndLocate::ROSDetectAndLocate() : ROSDetect(), Locate() {
   LocalizationParameters loc_p;
   CameraParameters cam_p;
 
+  depth_received_ = false;
+
   // Global parameters
   nh_.param("image_rows", glo_p.image_height, 480);
   nh_.param("image_cols", glo_p.image_width, 640);
@@ -175,10 +177,10 @@ ROSDetectAndLocate::~ROSDetectAndLocate() {
  * @param msg 
  */
 void ROSDetectAndLocate::depthInfoCallback(const sensor_msgs::CameraInfoConstPtr& msg){
-  std::vector<double> P{msg->K[2], msg->K[5], msg->K[0], msg->K[4]};
-  std::vector<float> Pf(msg->P.begin(), msg->P.end());
+  //std::vector<float> P{msg->K[2], msg->K[5], msg->K[0], msg->K[4]};
+  std::vector<float> P(msg->K.begin(), msg->K.end());
   std::vector<float> K(msg->D.begin(), msg->D.end());
-  updateCameraInfo(Pf, K);
+  updateCameraInfo(P, K);
 }
 
 /**
@@ -196,6 +198,7 @@ void ROSDetectAndLocate::depthCallback(const sensor_msgs::ImageConstPtr& msg){
     return;
   }
   cv_ptr->image.convertTo(depth_image_, CV_32F, 0.001);
+  depth_received_ = true;
 }
 
 #ifdef PUBLISH_DETECTION_WITH_POSITION
@@ -304,6 +307,9 @@ void ROSDetectAndLocate::publishPositions(std::vector<std::vector<BoundingBox>>&
  * @param msg 
  */
 void ROSDetectAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
+  if (!depth_received_) {
+    return;
+  }
 #ifdef PROFILE
   auto start_inference = std::chrono::system_clock::now();
 #endif
@@ -345,18 +351,20 @@ void ROSDetectAndLocate::imageCallback(const sensor_msgs::ImageConstPtr& msg){
  * @brief Construct a new ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate object
  * 
  */
-ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), Track2D() {
+ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), Track2D(), listener_(tf_buffer_), csv_writer_() {
   DetectionParameters det_p;
   KalmanParameters kal_p;
   TrackingParameters tra_p;
   BBoxRejectionParameters bbo_p;
   // Model parameters
   std::string default_path_to_engine("None");
+  std::string default_global_frame("map");
   std::vector<std::string> default_class_map {std::string("object")};
   nh_.param("path_to_engine", det_p.engine_path, default_path_to_engine);
   nh_.param("num_classes", det_p.num_classes, 1);
   nh_.param("class_map", det_p.class_map, default_class_map);
   nh_.param("num_buffers", det_p.num_buffers, 2);
+  nh_.param("global_frame", global_frame_, default_global_frame);
   // Kalman parameters
   std::vector<float> default_Q {9.0, 9.0, 200.0, 200.0, 5.0, 5.0};
   std::vector<float> default_R {2.0, 2.0, 200.0, 200.0, 2.0, 2.0};
@@ -380,12 +388,30 @@ ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate() : ROSDetectAndLocate(), T
   nh_.param("max_bbox_height", bbo_p.max_bbox_height, 300);
   buildTrack2D(det_p, kal_p, tra_p, bbo_p);
 
+  std::vector<std::string> header;
+  header.push_back(std::string("target_x"));
+  header.push_back(std::string("target_y"));
+  header.push_back(std::string("target_z"));
+  header.push_back(std::string("observer_x"));
+  header.push_back(std::string("observer_y"));
+  header.push_back(std::string("observer_z"));
+  header.push_back(std::string("estimated_x"));
+  header.push_back(std::string("estimated_y"));
+  header.push_back(std::string("estimated_z"));
+  std::string name("/home/antoine/test_csv_cpp.csv");
+  std::string separator(",");
+  std::string endline("\n");
+  unsigned int buffer_size(20);
+  csv_writer_ = new csvWriter(name, separator, endline, header, buffer_size);
+
 #ifdef PUBLISH_DETECTION_IMAGE
   tracker_pub_ = it_.advertise("tracking_image", 1);
 #endif
 }
 
-ROSDetectTrack2DAndLocate::~ROSDetectTrack2DAndLocate(){}
+ROSDetectTrack2DAndLocate::~ROSDetectTrack2DAndLocate(){
+  delete csv_writer_;
+}
 
 /**
  * @brief 
@@ -438,6 +464,42 @@ void ROSDetectTrack2DAndLocate::publishDetectionsAndPositions(std::vector<std::m
       vec_ros_bboxes.push_back(ros_bbox);
       poses.push_back(pose);
     }
+  }
+  if (poses.size() > 0) {
+  geometry_msgs::PoseStamped dummy, dummy2, true_trg_uav_pose, true_trg_uav_pose2, est_local_trg_uav_pose, est_trg_uav_pose;
+  dummy.header.stamp = ros::Time(0);
+  dummy.header.frame_id = "uav_1/base_link";
+  dummy.pose.position.z = 0.24;
+  dummy2.header.stamp = ros::Time(0);
+  dummy2.header.frame_id = "uav_2/base_link";
+  dummy2.pose.position.z = 0.24;
+  est_local_trg_uav_pose.header.stamp = ros::Time(0);
+  est_local_trg_uav_pose.header.frame_id = header.frame_id;
+  est_local_trg_uav_pose.pose.position.x = poses[0].position.x;
+  est_local_trg_uav_pose.pose.position.y = poses[0].position.y;
+  est_local_trg_uav_pose.pose.position.z = poses[0].position.z;
+  tf_buffer_.transform(dummy, true_trg_uav_pose, "map", ros::Duration(1.0));
+  tf_buffer_.transform(dummy2, true_trg_uav_pose2, "map", ros::Duration(1.0));
+  tf_buffer_.transform(est_local_trg_uav_pose, est_trg_uav_pose, "map", ros::Duration(1.0));
+  float d, d2;
+  std::vector<float> position_data;
+  position_data.push_back(true_trg_uav_pose.pose.position.x);
+  position_data.push_back(true_trg_uav_pose.pose.position.y);
+  position_data.push_back(true_trg_uav_pose.pose.position.z);
+  position_data.push_back(true_trg_uav_pose2.pose.position.x);
+  position_data.push_back(true_trg_uav_pose2.pose.position.y);
+  position_data.push_back(true_trg_uav_pose2.pose.position.z);
+  position_data.push_back(est_trg_uav_pose.pose.position.x);
+  position_data.push_back(est_trg_uav_pose.pose.position.y);
+  position_data.push_back(est_trg_uav_pose.pose.position.z);
+  csv_writer_->addToBuffer(position_data);
+  d = std::sqrt((true_trg_uav_pose.pose.position.x - est_trg_uav_pose.pose.position.x) * (true_trg_uav_pose.pose.position.x - est_trg_uav_pose.pose.position.x) +\
+      (true_trg_uav_pose.pose.position.y - est_trg_uav_pose.pose.position.y) * (true_trg_uav_pose.pose.position.y - est_trg_uav_pose.pose.position.y) +\
+      (true_trg_uav_pose.pose.position.z - est_trg_uav_pose.pose.position.z) * (true_trg_uav_pose.pose.position.z - est_trg_uav_pose.pose.position.z));
+  d2 = std::sqrt((true_trg_uav_pose.pose.position.x - true_trg_uav_pose2.pose.position.x) * (true_trg_uav_pose.pose.position.x - true_trg_uav_pose2.pose.position.x) +\
+      (true_trg_uav_pose.pose.position.y - true_trg_uav_pose2.pose.position.y) * (true_trg_uav_pose.pose.position.y - true_trg_uav_pose2.pose.position.y) +\
+      (true_trg_uav_pose.pose.position.z - true_trg_uav_pose2.pose.position.z) * (true_trg_uav_pose.pose.position.z - true_trg_uav_pose2.pose.position.z));
+  printf("%.3f, %.3f\n", d, d2);
   }
   ros_bboxes.header.stamp = header.stamp;
   ros_bboxes.header.frame_id = header.frame_id;
@@ -501,6 +563,21 @@ void ROSDetectTrack2DAndLocate::publishPositions(std::vector<std::map<unsigned i
       poses.push_back(pose);
     }
   }
+
+  geometry_msgs::PoseStamped dummy, true_trg_uav_pose, est_local_trg_uav_pose, est_trg_uav_pose;
+  dummy.header.stamp = header.stamp;
+  dummy.header.frame_id = "uav_1/base_link";
+  est_local_trg_uav_pose.header.stamp = header.stamp;
+  est_local_trg_uav_pose.header.frame_id = header.frame_id;
+  est_local_trg_uav_pose.pose.position.x = poses[0].position.x;
+  est_local_trg_uav_pose.pose.position.y = poses[0].position.y;
+  est_local_trg_uav_pose.pose.position.z = poses[0].position.z;
+  tf_buffer_.transform(dummy, true_trg_uav_pose, "map", ros::Duration(1.0));
+  tf_buffer_.transform(est_local_trg_uav_pose, est_trg_uav_pose, "map", ros::Duration(1.0));
+  printf("%.3f, %.3f\n", true_trg_uav_pose.pose.position.x, est_trg_uav_pose.pose.position.x);
+
+
+
   pose_array.header.stamp = header.stamp;
   pose_array.header.frame_id = header.frame_id;
   pose_array.poses = poses;
@@ -852,4 +929,268 @@ void ROSTrack2D::imageCallback(const sensor_msgs::ImageConstPtr& msg){
   image_ = cv_ptr->image;
   header_ = cv_ptr->header;
   cv::cvtColor(image_, image_, cv::COLOR_BGR2RGB);
+}
+
+/**
+ * @brief Construct a new ROSDetectTrack2DAndLocate::ROSDetectTrack2DAndLocate object
+ * 
+ */
+ROSDetectAndTrack3D::ROSDetectAndTrack3D() : ROSDetectAndLocate(), Track3D(), listener_(tf_buffer_) {
+  DetectionParameters det_p;
+  KalmanParameters kal_p;
+  TrackingParameters tra_p;
+  BBoxRejectionParameters bbo_p;
+  // Model parameters
+  std::string default_path_to_engine("None");
+  std::string default_global_frame("map");
+  std::vector<std::string> default_class_map {std::string("object")};
+  depth_received_ = false;
+  nh_.param("path_to_engine", det_p.engine_path, default_path_to_engine);
+  nh_.param("num_classes", det_p.num_classes, 1);
+  nh_.param("class_map", det_p.class_map, default_class_map);
+  nh_.param("num_buffers", det_p.num_buffers, 2);
+  nh_.param("global_frame", global_frame_, default_global_frame);
+  // Kalman parameters
+  std::vector<float> default_Q {0.25, 0.25, 0.25, 25.0, 25.0, 25.0, 0.25, 0.25, 0.25};
+  std::vector<float> default_R {0.125, 0.125, 0.125, 25.0, 25.0, 25.0, 0.125, 0.125, 0.125};
+  Q_.resize(9);
+  R_.resize(9);
+  nh_.param("Q", kal_p.Q, default_Q);
+  nh_.param("R", kal_p.R, default_R);
+  nh_.param("use_vel", kal_p.use_vel, false);
+  nh_.param("use_dim", kal_p.use_vel, true);
+  // Tracking parameters
+  nh_.param("center_threshold", tra_p.center_thresh, 80.0f);
+  nh_.param("dist_threshold", tra_p.distance_thresh, 150.0f);
+  nh_.param("body_ratio", tra_p.body_ratio, 0.5f);
+  nh_.param("area_threshold", tra_p.area_thresh, 2.0f);
+  nh_.param("dt", tra_p.dt, 0.02f);
+  nh_.param("max_frames_to_skip", tra_p.max_frames_to_skip, 10);
+  // BBox rejection
+  nh_.param("min_bbox_width", bbo_p.min_bbox_width, 60);
+  nh_.param("max_bbox_width", bbo_p.max_bbox_width, 400);
+  nh_.param("min_bbox_height", bbo_p.min_bbox_height, 60);
+  nh_.param("max_bbox_height", bbo_p.max_bbox_height, 300);
+  buildTrack3D(det_p, kal_p, tra_p, bbo_p);
+
+#ifdef PUBLISH_DETECTION_IMAGE
+  tracker_pub_ = it_.advertise("tracking_image", 1);
+#endif
+}
+
+ROSDetectAndTrack3D::~ROSDetectAndTrack3D(){}
+
+/**
+ * @brief 
+ * 
+ * @param image_tracker 
+ * @param tracker_states 
+ */
+void ROSDetectAndTrack3D::publishTrackingImage(cv::Mat& image_tracker,
+                                            std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states) {
+  generateTrackingImage(image_tracker, tracker_states);
+  cv::cvtColor(image_tracker, image_tracker, cv::COLOR_RGB2BGR);
+  std_msgs::Header image_ptr_out_header;
+  image_ptr_out_header.stamp = ros::Time::now();
+  image_ptr_out_ = cv_bridge::CvImage(image_ptr_out_header, "bgr8", image_tracker).toImageMsg();
+  tracker_pub_.publish(image_ptr_out_);
+}
+
+#ifdef PUBLISH_DETECTION_WITH_POSITION
+/**
+ * @brief 
+ * 
+ * @param tracker_states 
+ * @param points 
+ * @param header 
+ */
+void ROSDetectAndTrack3D::publishDetectionsAndPositions(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
+                                                     std::vector<std::map<unsigned int, std::vector<float>>>& points,
+                                                     std_msgs::Header& header){
+  detect_and_track::PositionBoundingBox2DArray ros_bboxes;
+  geometry_msgs::PoseArray pose_array;
+  geometry_msgs::Pose pose;
+  std::vector<geometry_msgs::Pose> poses;
+  detect_and_track::PositionBoundingBox2D ros_bbox;
+  std::vector<detect_and_track::PositionBoundingBox2D> vec_ros_bboxes;
+  for (unsigned int i=0; i<tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      ros_bbox.bbox.min_x = element.second[0] - element.second[4]/2;
+      ros_bbox.bbox.min_y = element.second[1] - element.second[5]/2;
+      ros_bbox.bbox.height = element.second[5];
+      ros_bbox.bbox.width = element.second[4];
+      ros_bbox.bbox.class_id = i;
+      ros_bbox.bbox.detection_id = element.first;
+      ros_bbox.position.x = points[i].at(element.first)[0];
+      ros_bbox.position.y = points[i].at(element.first)[1];
+      ros_bbox.position.z = points[i].at(element.first)[2];
+      pose.position.x = points[i].at(element.first)[0];
+      pose.position.y = points[i].at(element.first)[1];
+      pose.position.z = points[i].at(element.first)[2];
+      pose.orientation.w = 1.0;
+      vec_ros_bboxes.push_back(ros_bbox);
+      poses.push_back(pose);
+    }
+  }
+  ros_bboxes.header.stamp = header.stamp;
+  ros_bboxes.header.frame_id = header.frame_id;
+  ros_bboxes.bboxes = vec_ros_bboxes;
+  pose_array.header = ros_bboxes.header;
+  pose_array.poses = poses;
+  
+  positions_bboxes_pub_.publish(ros_bboxes);
+  pose_array_pub_.publish(pose_array);
+}
+
+#else
+
+/**
+ * @brief 
+ * 
+ * @param tracker_states 
+ * @param header 
+ */
+void ROSDetectAndTrack3D::publishDetections(std::vector<std::map<unsigned int, std::vector<float>>>& tracker_states,
+                                         std_msgs::Header& header) {
+  detect_and_track::BoundingBoxes2D ros_bboxes;
+  detect_and_track::BoundingBox2D ros_bbox;
+  std::vector<detect_and_track::BoundingBox2D> vec_ros_bboxes;
+
+  for (unsigned int i=0; i<tracker_states.size(); i++) {
+    for (auto & element : tracker_states[i]) {
+      ros_bbox.min_x = element.second[0] - element.second[4]/2;
+      ros_bbox.min_y = element.second[1] - element.second[5]/2;
+      ros_bbox.height = element.second[5];
+      ros_bbox.width = element.second[4];
+      ros_bbox.class_id = i;
+      ros_bbox.detection_id = element.first;
+      vec_ros_bboxes.push_back(ros_bbox);
+    }
+  }
+  ros_bboxes.header.stamp = header.stamp;
+  ros_bboxes.header.frame_id = header.frame_id;
+  ros_bboxes.bboxes = vec_ros_bboxes;
+
+  bboxes_pub_.publish(ros_bboxes);
+}
+
+/**
+ * @brief 
+ * 
+ * @param points 
+ * @param header 
+ */
+void ROSDetectAndTrack3D::publishPositions(std::vector<std::map<unsigned int, std::vector<float>>>& points,
+                                                 std_msgs::Header& header) {
+  geometry_msgs::PoseArray pose_array;
+  geometry_msgs::Pose pose;
+  std::vector<geometry_msgs::Pose> poses;
+  for (unsigned int i=0; i<points.size(); i++) {
+    for (auto & element : points[i]) {
+      pose.position.x = element.second[0];
+      pose.position.y = element.second[1];
+      pose.position.z = element.second[2];
+      pose.orientation.w = 1.0;
+      poses.push_back(pose);
+    }
+  }
+  pose_array.header.stamp = header.stamp;
+  pose_array.header.frame_id = header.frame_id;
+  pose_array.poses = poses;
+  pose_array_pub_.publish(pose_array);
+}
+#endif
+
+void ROSDetectAndTrack3D::points2Pose(std::vector<std::vector<std::vector<float>>>& points){
+
+  geometry_msgs::PoseStamped pose_from_cam;
+  pose_from_cam.header.frame_id = "camera_color_optical_frame";
+  pose_from_cam.header.stamp = t1_;
+  pose_from_cam.pose.orientation.x = 0;
+  pose_from_cam.pose.orientation.y = 0;
+  pose_from_cam.pose.orientation.z = 0;
+  pose_from_cam.pose.orientation.w = 1;
+
+  for (unsigned int i=0; i<points.size(); i++) {
+    geometry_msgs::PoseStamped tmp_pose;
+    for (unsigned int j=0; j<points[i].size(); j++) {
+      try {
+        pose_from_cam.pose.position.x = points[i][j][0];
+        pose_from_cam.pose.position.y = points[i][j][1];
+        pose_from_cam.pose.position.z = points[i][j][2];
+        //tf_buffer_.lookupTransform("world", "camera_color_optical_frame", ros::Time(0));
+        tf_buffer_.transform(pose_from_cam, tmp_pose, global_frame_, ros::Duration(1.0));
+        points[i][j][0] = tmp_pose.pose.position.x;
+        points[i][j][1] = tmp_pose.pose.position.y;
+        points[i][j][2] = tmp_pose.pose.position.z;
+      } catch (tf2::TransformException &ex) {
+        ROS_WARN("%s",ex.what());
+      }
+    }
+  }
+}
+
+/**
+ * @brief 
+ * 
+ * @param msg 
+ */
+void ROSDetectAndTrack3D::imageCallback(const sensor_msgs::ImageConstPtr& msg){
+  t2_ = t1_;
+  t1_ = ros::Time::now();
+  if (!depth_received_) {
+    return;
+  }
+  ros::Duration dt = t1_ - t2_; 
+  dt_ = (float) (dt.toSec());
+#ifdef PROFILE
+  auto start_inference = std::chrono::system_clock::now();
+#endif
+  cv_bridge::CvImagePtr cv_ptr;
+  try {
+    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+  } catch (cv_bridge::Exception &e) {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
+    return;
+  }
+  cv::Mat image = cv_ptr->image;
+  cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+  // Run detection and find the position of the objects in the local frame
+  std::vector<std::vector<BoundingBox>> bboxes(num_classes_);
+  std::vector<std::vector<BoundingBox3D>> bboxes3D(num_classes_);
+  printf("detecting stuff\n");
+  detectObjects(image, bboxes);
+  std::vector<std::vector<float>> distances;
+  std::vector<std::vector<std::vector<float>>> points;
+  printf("locating stuff\n");
+  locate(depth_image_, bboxes, distances, points);
+  // Project the objects into the global frame
+  printf("projecting points to global frame\n");
+  points2Pose(points);
+  printf("making 3D bboxes\n");
+  make3DBoundingBoxes(points, bboxes, bboxes3D);
+  // Run the tracking on the 3D objects
+  std::vector<std::map<unsigned int, std::vector<float>>> tracker_states;
+  tracker_states.resize(num_classes_);
+  track(bboxes3D, tracker_states, dt_);
+#ifdef PROFILE
+  auto end_inference = std::chrono::system_clock::now();
+  ROS_INFO("Full inference done in %ld ms", std::chrono::duration_cast<std::chrono::milliseconds>(end_inference - start_inference).count());
+  printProfilingDetection();
+  printProfilingTracking();
+  printProfilingLocalization();
+#endif
+
+#ifdef PUBLISH_DETECTION_IMAGE
+  publishDetectionImage(image, bboxes);
+#endif
+#ifdef PUBLISH_DETECTION_WITH_POSITION
+  //publishDetectionsAndPositions(tracker_states, points, cv_ptr->header);
+  //publishDetectionsAndPositions(bboxes, points, cv_ptr->header);
+#else
+  //publishDetections(bboxes,cv_ptr->header);
+  //publishPositions(bboxes, points, cv_ptr->header);
+  //publishDetections(tracker_states, cv_ptr->header);
+  //publishPositions(points, cv_ptr->header);
+#endif
 }
