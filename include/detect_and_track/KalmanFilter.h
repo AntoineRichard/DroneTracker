@@ -166,4 +166,28 @@ class KalmanFilter3D : public BaseKalmanFilter {
     ~KalmanFilter3D();
 };
 
+/**
+ * @brief a 3D (x,y,z) linear Kalman filter for fixed objects.
+ * @details This class implements a filter to estimate the position of objects in three dimensions.
+ * The state is composed of 5 variables: x, y, z, w, h.
+ * x, y, and z are the position on the x, y, and z axis respectively, w is the object width, and h is the object height.
+ * The measurement of this filter can be adjusted by the user. The position is always observed, but the width/height can, or not, be observed.
+ * By default we recommend observing the width/height.
+ */
+class KalmanFilter3DF : public BaseKalmanFilter {
+  protected:
+    void initialize(const std::vector<float>&);
+    void getMeasurement(const std::vector<float>&);
+    void buildR(const std::vector<float>&) override;
+    void buildH() override;
+    // Display methods.
+    void printF() override;
+    void printX() override;
+
+  public:
+    KalmanFilter3DF();
+    KalmanFilter3DF(const float&, const bool&, const std::vector<float>&);
+    ~KalmanFilter3DF();
+};
+
 #endif

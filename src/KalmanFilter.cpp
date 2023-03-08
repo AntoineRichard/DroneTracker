@@ -1008,7 +1008,7 @@ KalmanFilter3D::KalmanFilter3D(const float& dt, const bool& use_dim, const bool&
   // State is [x, y, z, vx, vy, vz, h, w]
   dt_ = dt;
   use_dim_ = use_dim;
-  use_vel_ = use_vel_;
+  use_vel_ = use_vel;
   initialize(Q,R);
 }
 
@@ -1252,4 +1252,200 @@ void KalmanFilter3D::updateF(const float& dt) {
   F_(0,3) = dt;
   F_(1,4) = dt;
   F_(2,5) = dt;
+}
+
+/**
+ * @brief Default constructor.
+ * @details Default constructor.
+ * 
+ */
+KalmanFilter3DF::KalmanFilter3DF() {}
+
+/**
+ * @brief Prefered constructor.
+ * @details Prefered constructor.
+ * @param dt The default time-delta in between two updates.
+ * @param use_dim A flag to indicate if the filter should observe the height and width of the tracked object.
+ * @param R A reference to a vector of floats containing the observation noise for each measurement (R5).
+ */
+KalmanFilter3DF::KalmanFilter3DF(const float& dt, const bool& use_dim, const std::vector<float>& R) {
+  // State is [x, y, z, vx, vy, vz, h, w]
+  dt_ = dt;
+  use_dim_ = use_dim;
+  initialize(R);
+}
+
+/**
+ * @brief Default destructor.
+ * @details Default destructor.
+ * 
+ */
+KalmanFilter3DF::~KalmanFilter3DF() {}
+
+/**
+ * @brief Helper function to display the matrix F.
+ * @details Helper function to display the matrix F.
+ * 
+ */
+void KalmanFilter3DF::printF() {
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(0,0), F_(0,1), F_(0,2), F_(0,3), F_(0,4));
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(1,0), F_(1,1), F_(1,2), F_(1,3), F_(1,4));
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(2,0), F_(2,1), F_(2,2), F_(2,3), F_(2,4));
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(3,0), F_(3,1), F_(3,2), F_(3,3), F_(3,4));
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, F_(4,0), F_(4,1), F_(4,2), F_(4,3), F_(4,4));
+}
+
+/**
+ * @brief Helper function to display the matrix X.
+ * @details Helper function to display the matrix X.
+ * 
+ */
+void KalmanFilter3DF::printX() {
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d %.3f, %.3f, %.3f, %.3f, %.3f\n", __func__, __LINE__, X_(0), X_(1), X_(2), X_(3), X_(4));
+}
+
+/**
+ * @brief Instantiates all the variables in the filter. 
+ * @details This function instantiates the following variables:
+ * X the state (R5), P the covariance (R5x5), Q the process noise (R5x5), R the observation noise (R?x?), F the dynamics (R5x5),
+ * H the observation matrix (R?x5), and I an identity matrix (R5x5).
+ * F, the dynamics is computed using the following equations:
+ * x_t+1 = x_t 
+ * y_t+1 = y_t 
+ * z_t+1 = z_t 
+ * h_t+1 = h_t
+ * w_t+1 = w_t
+ * 
+ * In this scenario, because F is the identity we use Q an identity matrix with a very small value to ensure
+ * that the covariance remains WHATEVER Cédric said.
+ * 
+ * @param R The reference to the measurement noise vector (R5).
+ */
+void KalmanFilter3DF::initialize(const std::vector<float>& R) {
+  // State is [x, y, z, vx ,vy, vz, h, w]
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Creating new 3D Kalman filter.\n", __func__, __LINE__); 
+#endif
+  X_ = Eigen::VectorXf(5);
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting state to 0.\n", __func__, __LINE__); 
+#endif
+  X_ << 0, 0, 0, 0, 0; // state is initialized a 0
+
+  // Process noise
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting Q.\n", __func__, __LINE__); 
+#endif
+  Q_ = Eigen::MatrixXf::Zero(5,5);
+  Q_(0,0) = 1e-4;
+  Q_(1,1) = 1e-4;
+  Q_(2,2) = 1e-4;
+  Q_(3,3) = 1e-4;
+  Q_(4,4) = 1e-4;
+
+  // Dynamics
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting F.\n", __func__, __LINE__); 
+#endif
+  F_ = Eigen::MatrixXf::Identity(5,5);
+
+  // Covariance
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting P.\n", __func__, __LINE__); 
+#endif
+  P_ = Eigen::MatrixXf::Zero(5,5);
+  P_ = Q_*Q_; // P is initialialized at Q*Q
+
+  // Helper matrices
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting I.\n", __func__, __LINE__); 
+#endif
+  I_ = Eigen::MatrixXf::Identity(5,5);
+
+  // Observation noise
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting R.\n", __func__, __LINE__); 
+#endif
+  buildR(R); // R is modular and depends on user choices. (use_dim)
+#ifdef DEBUG_KALMAN
+  printf("\e[1;33m[DEBUG  ]\e[0m KalmanFilter::%s::l%d Setting H.\n", __func__, __LINE__); 
+#endif
+  buildH(); // H is modular and depends on user choices. (use_dim)
+}
+
+/**
+ * @brief Instantiates the Observation matrix H.
+ * @details This function builds the observation matrix H based on the selected parameters.
+ * If the user selected use_dim, then the height and width will be observed and hence included in the observation matrix.
+ * 
+ */
+void KalmanFilter3DF::buildH(){
+  int h_size = 3;
+  if (use_dim_) {
+    h_size += 2;
+  }
+  H_ = Eigen::MatrixXf(h_size, 5);
+  Eigen::MatrixXf H_pos, H_pos_z, H_vel, H_vel_z, H_hw;
+  H_pos = Eigen::MatrixXf::Zero(3,5);
+  H_vel = Eigen::MatrixXf::Zero(3,5);
+  H_hw = Eigen::MatrixXf::Zero(2,5);
+
+  H_pos <<  1.0, 0, 0, 0, 0,
+            0, 1.0, 0, 0, 0,
+            0, 0, 1.0, 0, 0;
+
+  H_hw << 0, 0, 0, 1.0, 0,
+          0, 0, 0, 0, 1.0;
+
+  H_ = Eigen::MatrixXf::Zero(h_size,5);
+  if (use_dim_){
+    H_ << H_pos, H_hw;
+  } else {
+    H_ << H_pos;
+  }
+}
+
+/**
+ * @brief Instantiates the measurement noise R. 
+ * @details The function builds the measurement noise matrix R.
+ * The size of this matrix changes based on the selected parameters parameters.
+ * If the user selected use_dim, then the noise on the observed height and width will be added to the matrix.
+ * 
+ * @param R The reference to the vector containing the noise of the measurement (R5).
+ */
+void KalmanFilter3DF::buildR(const std::vector<float>& R){
+  int r_size = 3;
+  if (use_dim_) {
+    r_size += 3;
+  }
+  Z_ = Eigen::VectorXf::Zero(r_size);
+  R_ = Eigen::MatrixXf::Zero(r_size, r_size);
+  R_(0,0) = R[0];
+  R_(1,1) = R[1];
+  R_(2,2) = R[2];
+  if (use_dim_) {
+    R_(3,3) = R[3];
+    R_(4,4) = R[4]; 
+    R_(5,5) = R[5]; 
+  }
+}
+
+/**
+ * @brief Converts the std::vector to a eigen::MatrixXf. 
+ * @details Converts the measurement (std::vector<float>) into a eigen::MatrixXf.
+ * It also ensures that the correct quantities are being observed.
+ * The user must give a vector of full size even if the values are not observed (use 0s instead).
+ * 
+ * @param measurement The reference to the measurement vector (R6).
+ */
+void KalmanFilter3DF::getMeasurement(const std::vector<float>& measurement) {
+  // State is [x, y, z, vx, vy, vz, h, w, d]
+  Z_(0) = measurement[0];
+  Z_(1) = measurement[1];
+  Z_(2) = measurement[2];
+  if (use_dim_) {
+    Z_(3) = measurement[6];
+    Z_(4) = measurement[7];
+    Z_(5) = measurement[8];
+  }
 }
