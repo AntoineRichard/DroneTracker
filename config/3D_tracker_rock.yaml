@@ -1,0 +1,15 @@
+max_frames_to_skip: 15
+dist_threshold: 2.0
+center_threshold: 0.5
+area_threshold: 3.0
+body_ratio: 0.5
+dt: 0.02
+use_dim: true
+use_vel: false
+Q: [0.25, 0.25, 0.25, 25.0, 25.0, 25.0, 0.125, 0.125, 0.125]
+R: [0.125, 0.125, 0.125, 25.0, 25.0, 25.0, 0.125, 0.125, 0.125]
+min_bbox_width: 20
+max_bbox_width: 400
+min_bbox_height: 20
+max_bbox_height: 400
+tracking_mode: 2D
